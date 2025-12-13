@@ -1,905 +1,617 @@
-const params = new URLSearchParams(window.location.search);
-const code = params.get("code") || "DEMO";
-const packUrl = `/packs/${code}.json`;
-
-async function loadPack() {
-  const res = await fetch(packUrl);
-  if (!res.ok) throw new Error("Pack bulunamadı");
-  return await res.json();
-}
-
-// Global BGM: scene değişse de tek kez çalsın
-function ensureBgm(scene) {
-  if (window.__COUPLE_BONK_BGM && window.__COUPLE_BONK_BGM.isPlaying) return;
-  const bgm = scene.sound.add("bgm", { loop: true, volume: 0.55 });
-  bgm.play();
-  window.__COUPLE_BONK_BGM = bgm;
-}
-
-const UI_FONT = "system-ui, -apple-system, Segoe UI, Arial";
-
-/* ---------------- SPLASH ---------------- */
-class SplashScene extends Phaser.Scene {
-  constructor() { super("Splash"); }
-  init(data) { this.pack = data.pack; }
-
-  preload() {
-    this.load.image("bg_intro", "/assets/bg_intro.jpg");
-    this.load.audio("bgm", "/assets/music_intro.mp3");
-
-    this.load.image("face", this.pack.face);
-    this.load.image("body_base", "/assets/body_base.png");
-    this.load.image("girl_base", "/assets/girl_base.png");
-
-    this.load.audio("switch", "/sounds/switch.mp3");
-
-    this.load.audio("slap1", "/sounds/slap1.mp3");
-    this.load.audio("slap2", "/sounds/slap2.mp3");
-    this.load.audio("slap3", "/sounds/slap3.mp3");
-
-    this.load.audio("slipper1", "/sounds/slipper1.mp3");
-    this.load.audio("slipper2", "/sounds/slipper2.mp3");
-    this.load.audio("slipper3", "/sounds/slipper3.mp3");
-
-    this.load.audio("pillow1", "/sounds/pillow1.mp3");
-    this.load.audio("pillow2", "/sounds/pillow2.mp3");
-    this.load.audio("pillow3", "/sounds/pillow3.mp3");
-
-    this.load.audio("pan1", "/sounds/pan1.mp3");
-    this.load.audio("pan2", "/sounds/pan2.mp3");
-    this.load.audio("pan3", "/sounds/pan3.mp3");
-  }
-
-  create() {
-    const { width, height } = this.scale;
-
-    const bg = this.add.image(width / 2, height / 2, "bg_intro");
-    bg.setDisplaySize(width, height);
-    this.add.rectangle(width/2, height/2, width, height, 0x000000, 0.38);
-
-    ensureBgm(this);
-
-    // Premium card
-    const cardW = Math.min(360, width - 40);
-    const cardH = 520;
-    const cardX = width/2;
-    const cardY = height/2;
-
-    const card = this.add.graphics();
-    card.fillStyle(0x0b0b12, 0.82);
-    card.fillRoundedRect(cardX - cardW/2, cardY - cardH/2, cardW, cardH, 22);
-    card.lineStyle(2, 0xffffff, 0.14);
-    card.strokeRoundedRect(cardX - cardW/2, cardY - cardH/2, cardW, cardH, 22);
-
-    // Face preview
-    const face = this.add.image(width/2, cardY - 185, "face").setDisplaySize(150, 150);
-    const m = this.make.graphics({ add: false });
-    m.fillCircle(face.x, face.y, 75);
-    face.setMask(m.createGeometryMask());
-
-    const title = this.pack.title || "Couple Bonk";
-    this.add.text(width/2, cardY - 270, title, {
-      fontFamily: UI_FONT, fontSize: "28px", color: "#fff", fontStyle: "700"
-    }).setOrigin(0.5).setShadow(0, 3, "#000", 12);
-
-    this.add.text(width/2, cardY - 235, "Basit oynanış • aşırı iyi his • gösterince güldürür", {
-      fontFamily: UI_FONT, fontSize: "12px", color: "#d9d9ff"
-    }).setOrigin(0.5);
-
-    // Start button
-    const btnW = Math.min(300, width - 80);
-    const btnH = 56;
-    const btnY = cardY + 60;
-
-    const btn = this.add.graphics();
-    btn.fillStyle(0xffffff, 0.14);
-    btn.fillRoundedRect(width/2 - btnW/2, btnY - btnH/2, btnW, btnH, 18);
-    btn.lineStyle(2, 0xffffff, 0.18);
-    btn.strokeRoundedRect(width/2 - btnW/2, btnY - btnH/2, btnW, btnH, 18);
-
-    this.add.text(width/2, btnY - 12, "BAŞLA", {
-      fontFamily: UI_FONT, fontSize: "18px", color: "#fff", fontStyle: "800"
-    }).setOrigin(0.5).setShadow(0, 3, "#000", 12);
-
-    this.add.text(width/2, btnY + 12, "Ekrana dokun = vur • Alttan silah seç", {
-      fontFamily: UI_FONT, fontSize: "11px", color: "#cfcfe6"
-    }).setOrigin(0.5);
-
-    const hit = this.add.rectangle(width/2, btnY, btnW, btnH, 0x000000, 0.001)
-      .setInteractive({ useHandCursor: true });
-
-    hit.on("pointerover", () => {
-      btn.clear();
-      btn.fillStyle(0xffffff, 0.18);
-      btn.fillRoundedRect(width/2 - btnW/2, btnY - btnH/2, btnW, btnH, 18);
-      btn.lineStyle(2, 0xffffff, 0.20);
-      btn.strokeRoundedRect(width/2 - btnW/2, btnY - btnH/2, btnW, btnH, 18);
-    });
-    hit.on("pointerout", () => {
-      btn.clear();
-      btn.fillStyle(0xffffff, 0.14);
-      btn.fillRoundedRect(width/2 - btnW/2, btnY - btnH/2, btnW, btnH, 18);
-      btn.lineStyle(2, 0xffffff, 0.18);
-      btn.strokeRoundedRect(width/2 - btnW/2, btnY - btnH/2, btnW, btnH, 18);
-    });
-
-    hit.on("pointerdown", () => this.scene.start("Game", { pack: this.pack }));
-
-    // tiny footer
-    this.add.text(width/2, cardY + 220, "Kişiye özel: kafa foto + isimler + sesler", {
-      fontFamily: UI_FONT, fontSize: "12px", color: "#ddd"
-    }).setOrigin(0.5);
-  }
-}
-
-/* ---------------- GAME ---------------- */
-class GameScene extends Phaser.Scene {
-  constructor() { super("Game"); }
-
-  init(data) {
-    this.pack = data.pack;
-
-    this.timeLeft = 60;
-    this.score = 0;
-    this.displayScore = 0;
-
-    this.combo = 0;
-    this.mult = 1;
-    this.lastHitAt = 0;
-    this.comboWindowMs = 750;
-    this.bestCombo = 0;
-
-    this.anger = 0;
-    this.ended = false;
-
-    this.weapon = "slap";
-    this.bottomBarH = 110;
-
-    this.hitBusy = false;
-    this.isPaused = false;
-
-    this.totalHits = 0;
-  }
-
-  makeText(x, y, txt, size=16, color="#fff", weight="700") {
-    return this.add.text(x, y, txt, {
-      fontFamily: UI_FONT,
-      fontSize: `${size}px`,
-      color,
-      fontStyle: weight
-    }).setShadow(0, 3, "#000", 12);
-  }
-
-  roundedPanel(x, y, w, h, r=18, a=0.60) {
-    const g = this.add.graphics();
-    g.fillStyle(0x0b0b12, a);
-    g.fillRoundedRect(x - w/2, y - h/2, w, h, r);
-    g.lineStyle(2, 0xffffff, 0.10);
-    g.strokeRoundedRect(x - w/2, y - h/2, w, h, r);
-    return g;
-  }
-
-  create() {
-    const { width, height } = this.scale;
-
-    const bg = this.add.image(width/2, height/2, "bg_intro");
-    bg.setDisplaySize(width, height);
-    bg.setAlpha(0.18);
-    this.add.rectangle(width/2, height/2, width, height, 0x000000, 0.36);
-
-    ensureBgm(this);
-
-    // Premium HUD top
-    this.roundedPanel(width/2, 44, width - 26, 76, 20, 0.62);
-
-    this.scoreText = this.makeText(24, 18, "Skor: 0", 18, "#fff", "800").setOrigin(0,0);
-    this.comboText = this.makeText(24, 44, "Combo: 0  x1", 13, "#ffcc00", "700").setOrigin(0,0);
-
-    this.timeText = this.makeText(width - 22, 18, `${this.timeLeft}s`, 18, "#fff", "800").setOrigin(1,0);
-    this.weaponLabel = this.makeText(width - 22, 44, "", 13, "#b7e3ff", "700").setOrigin(1,0);
-
-    // Pause
-    this.pauseBtn = this.makeText(width - 46, 44, "⏸", 18, "#fff", "800")
-      .setOrigin(0.5,0)
-      .setInteractive({ useHandCursor: true });
-    this.pauseBtn.on("pointerdown", () => this.openPauseOverlay());
-
-    // Toast
-    this.toastText = this.makeText(width/2, 120, "", 18, "#fff", "800").setOrigin(0.5).setAlpha(0);
-
-    // Anger bar (capsule)
-    this.barX = width - 30;
-    this.barBottomY = height/2 + 115;
-    this.barMaxHeight = 230;
-
-    this.barBg = this.add.graphics();
-    this.barBg.fillStyle(0x11111a, 0.88);
-    this.barBg.fillRoundedRect(this.barX - 8, this.barBottomY - this.barMaxHeight, 16, this.barMaxHeight, 8);
-    this.barBg.lineStyle(2, 0xffffff, 0.10);
-    this.barBg.strokeRoundedRect(this.barX - 8, this.barBottomY - this.barMaxHeight, 16, this.barMaxHeight, 8);
-
-    this.barFill = this.add.graphics();
-    this.drawBar();
-
-    // Characters
-    this.body = this.add.image(width/2, (height - this.bottomBarH)/2 + 120, "body_base");
-    const targetBodyW = Math.min(width * 0.82, 330);
-    const bodyRatio = this.body.height / this.body.width;
-    this.body.setDisplaySize(targetBodyW, targetBodyW * bodyRatio);
-
-    const bodyTopY = this.body.y - this.body.displayHeight/2;
-    const faceY = bodyTopY + 70;
-    const faceSize = Math.min(width * 0.46, 190);
-    this.faceBaseSize = faceSize;
-
-    this.face = this.add.image(this.body.x, faceY, "face").setDisplaySize(faceSize, faceSize);
-    const maskG = this.make.graphics({ add: false });
-    maskG.fillCircle(this.face.x, this.face.y, faceSize/2);
-    this.face.setMask(maskG.createGeometryMask());
-
-    this.girl = this.add.image(width*0.23, height - this.bottomBarH - 15, "girl_base");
-    const baseGirlW = Math.min(width * 0.62, 260);
-    const girlRatio = this.girl.height / this.girl.width;
-    this.girl.setDisplaySize(baseGirlW*0.88, (baseGirlW*0.88) * girlRatio);
-    this.girl.setOrigin(0.5, 1);
-
-    // Home anchors (drift fix)
-    this.girlHomeX = this.girl.x;
-    this.girlHomeY = this.girl.y;
-    this.bodyHomeY = this.body.y;
-    this.faceHomeY = this.face.y;
-
-    // FX layers
-    this.hitFlash = this.add.rectangle(width/2, height/2, width, height, 0xffffff, 0).setDepth(9999);
-
-    // Weapons
-    this.weapons = {
-      slap:    { label: "👋 Tokat",   base: 1, anger: 1, sounds: ["slap1","slap2","slap3"], fx: "👋" },
-      slipper: { label: "🥿 Terlik",  base: 2, anger: 2, sounds: ["slipper1","slipper2","slipper3"], fx: "🥿" },
-      pillow:  { label: "🛏️ Yastık", base: 3, anger: 1, sounds: ["pillow1","pillow2","pillow3"], fx: "🛏️" },
-      pan:     { label: "🍳 Tava",    base: 5, anger: 4, sounds: ["pan1","pan2","pan3"], fx: "🍳" }
-    };
-
-    this.updateWeaponUI();
-    this.createWeaponBar();
-
-    // Idle bob
-    this.startIdleBobbing();
-
-    // Timer
-    this.timerEvent = this.time.addEvent({
-      delay: 1000,
-      loop: true,
-      callback: () => {
-        if (this.ended || this.isPaused) return;
-        this.timeLeft--;
-        this.timeText.setText(`${this.timeLeft}s`);
-        if (this.timeLeft <= 0) this.endGame("Süre bitti 😈");
-      }
-    });
-
-    // Anger decay (hızlı düşsün ki vursunlar)
-    this.angerDecayEvent = this.time.addEvent({
-      delay: 120,
-      loop: true,
-      callback: () => {
-        if (this.ended || this.isPaused) return;
-
-        const now = this.time.now;
-        const idleMs = now - this.lastHitAt;
-        if (idleMs < 520) return;
-
-        let baseDecay = (this.weapon === "pan") ? 0.95 :
-                        (this.weapon === "slipper") ? 1.10 :
-                        (this.weapon === "slap") ? 1.25 : 1.55;
-
-        if (this.anger > 0) {
-          this.anger = Math.max(0, this.anger - baseDecay);
-          this.drawBar();
-        }
-      }
-    });
-
-    // Input
-    this.input.on("pointerdown", (p) => {
-      if (this.ended || this.isPaused) return;
-      if (p.y >= height - this.bottomBarH) return;
-      this.hit();
-    });
-  }
-
-  /* ---------- Premium core feel ---------- */
-  hitStop(ms = 60) {
-    // Minik "donma": tween timeScale'ı düşür, sonra geri al
-    const prev = this.tweens.timeScale ?? 1;
-    this.tweens.timeScale = 0.08;
-    window.setTimeout(() => {
-      if (this.ended) return;
-      this.tweens.timeScale = prev;
-    }, ms);
-  }
-
-  impactRing() {
-    const x = this.face.x;
-    const y = this.face.y;
-    const ring = this.add.graphics();
-    ring.setDepth(9000);
-
-    const startR = this.faceBaseSize * 0.42;
-    const endR   = this.faceBaseSize * 0.62;
-
-    const state = { r: startR, a: 0.65 };
-    const draw = () => {
-      ring.clear();
-      ring.lineStyle(4, 0xffffff, state.a);
-      ring.strokeCircle(x, y, state.r);
-    };
-
-    draw();
-    this.tweens.add({
-      targets: state,
-      r: endR,
-      a: 0,
-      duration: 160,
-      ease: "Quad.easeOut",
-      onUpdate: draw,
-      onComplete: () => ring.destroy()
-    });
-  }
-
-  scoreCountUp(toValue) {
-    const from = this.displayScore;
-    const obj = { v: from };
-    this.tweens.killTweensOf(obj);
-
-    this.tweens.add({
-      targets: obj,
-      v: toValue,
-      duration: 140,
-      ease: "Quad.easeOut",
-      onUpdate: () => {
-        this.displayScore = Math.round(obj.v);
-        this.scoreText.setText("Skor: " + this.displayScore);
-      },
-      onComplete: () => {
-        this.displayScore = toValue;
-        this.scoreText.setText("Skor: " + this.displayScore);
-      }
-    });
-  }
-
-  /* ---------- UI ---------- */
-  toast(msg) {
-    this.toastText.setText(msg).setAlpha(1);
-    this.tweens.killTweensOf(this.toastText);
-    this.tweens.add({ targets: this.toastText, alpha: 0, duration: 720 });
-  }
-
-  drawBar() {
-    this.barFill.clear();
-    const h = (this.anger / 100) * this.barMaxHeight;
-    this.barFill.fillStyle(0xff4d6d, 1);
-    this.barFill.fillRoundedRect(this.barX - 8, this.barBottomY - h, 16, h, 8);
-  }
-
-  updateWeaponUI() {
-    const w = this.weapons[this.weapon];
-    this.weaponLabel.setText(`Silah: ${w.label}`);
-
-    if (this.weaponButtons) {
-      for (const k of Object.keys(this.weaponButtons)) {
-        const sel = (k === this.weapon);
-        this.weaponButtons[k].bg.setAlpha(sel ? 0.92 : 0.22);
-        this.weaponButtons[k].txt.setScale(sel ? 1.18 : 1.0);
-      }
+/* couple-bonk app.js
+   - Phaser 3 tek dosya
+   - Arka plan hem menüde hem oyunda
+   - Pack sistemi: ?code=AYSEMEHMET => packs/AYSEMEHMET.json + packs/AYSEMEHMET_face.jpg
+   - Silah butonları altta
+   - Sinir barı vurmayınca hızlı düşer
+   - Pause menüsü: Resume / Restart / Main Menu
+   - Yumruk emojisi kaldırıldı
+   - Tava = 🍳, Yastık = 🛏️ (yatak değil diye istemiştin ama emoji seti sınırlı; istersen 🧸/☁️ da yaparız)
+*/
+
+(() => {
+  // -----------------------------
+  // Helpers
+  // -----------------------------
+  const qs = new URLSearchParams(location.search);
+  const CODE = (qs.get("code") || "DEMO").trim();
+  const PACK_BASE = `/packs/${CODE}`;
+  const PACK_JSON = `${PACK_BASE}.json`;
+  // yüz dosyan sende jpg olmuştu
+  const PACK_FACE = `${PACK_BASE}_face.jpg`;
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const WEAPONS = [
+    { key: "hand",  label: "🖐️", name: "Tokat",  sounds: ["slap1", "slap2", "slap3"],  score: 1,  shake: 6,  hitScale: 1.00 },
+    { key: "pillow",label: "🧸", name: "Yastık", sounds: ["pillow1","pillow2","pillow3"], score: 2, shake: 4,  hitScale: 1.02 },
+    { key: "pan",   label: "🍳", name: "Yumurta Tavası", sounds: ["pan1","pan2","pan3"], score: 3, shake: 8,  hitScale: 1.03 },
+  ];
+
+  // -----------------------------
+  // Global runtime state
+  // -----------------------------
+  const R = {
+    pack: null,
+    weaponKey: "hand",
+    music: null,
+    musicStarted: false,
+  };
+
+  // -----------------------------
+  // Scenes
+  // -----------------------------
+  class BootScene extends Phaser.Scene {
+    constructor() { super("Boot"); }
+    preload() {
+      // Minimal UI font vibe
+      this.load.image("bg", "/assets/bg.jpg");
+      this.load.image("girlBase", "/assets/girl_base.png");
+      this.load.image("bodyBase", "/assets/body_base.png");
+      this.load.audio("musicIntro", "/assets/music_intro.mp3");
+
+      // Sounds
+      this.load.audio("slap1", "/sounds/slap1.mp3");
+      this.load.audio("slap2", "/sounds/slap2.mp3");
+      this.load.audio("slap3", "/sounds/slap3.mp3");
+      this.load.audio("pillow1", "/sounds/pillow1.mp3");
+      this.load.audio("pillow2", "/sounds/pillow2.mp3");
+      this.load.audio("pillow3", "/sounds/pillow3.mp3");
+      this.load.audio("pan1", "/sounds/pan1.mp3");
+      this.load.audio("pan2", "/sounds/pan2.mp3");
+      this.load.audio("pan3", "/sounds/pan3.mp3");
+      this.load.audio("switchSfx", "/sounds/switch.mp3");
+
+      // Pack JSON + face
+      this.load.json("pack", PACK_JSON);
+      this.load.image("face", PACK_FACE);
+
+      // Simple loading overlay
+      const { width, height } = this.scale;
+      const g = this.add.graphics();
+      const title = this.add.text(width/2, height*0.42, "Yükleniyor…", {
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+        fontSize: "22px",
+        color: "#ffffff"
+      }).setOrigin(0.5);
+
+      const barBg = this.add.rectangle(width/2, height*0.5, Math.min(320, width*0.7), 10, 0xffffff, 0.15);
+      const barFill = this.add.rectangle(barBg.x - barBg.width/2, barBg.y, 2, 10, 0xffffff, 0.9).setOrigin(0,0.5);
+
+      this.load.on("progress", (p) => {
+        barFill.width = clamp(barBg.width * p, 2, barBg.width);
+      });
+
+      this.load.on("complete", () => {
+        title.destroy();
+        barBg.destroy();
+        barFill.destroy();
+        g.destroy();
+      });
     }
-  }
 
-  createWeaponBar() {
-    const { width, height } = this.scale;
-    const barY = height - this.bottomBarH;
-
-    const g = this.add.graphics();
-    g.fillStyle(0x0b0b12, 0.74);
-    g.fillRoundedRect(10, barY + 10, width - 20, this.bottomBarH - 20, 22);
-    g.lineStyle(2, 0xffffff, 0.10);
-    g.strokeRoundedRect(10, barY + 10, width - 20, this.bottomBarH - 20, 22);
-
-    const keys = ["slap", "slipper", "pillow", "pan"];
-    const emojis = { slap: "👋", slipper: "🥿", pillow: "🛏️", pan: "🍳" };
-    const pad = 14;
-    const btnW = (width - pad * (keys.length + 1)) / keys.length;
-    const btnH = this.bottomBarH - 36;
-
-    this.weaponButtons = {};
-
-    keys.forEach((k, i) => {
-      const x = pad + btnW/2 + i*(btnW + pad);
-      const y = barY + this.bottomBarH/2 + 6;
-
-      const bg = this.add.rectangle(x, y, btnW, btnH, 0xffffff, 0.22)
-        .setStrokeStyle(2, 0xffffff, 0.12)
-        .setInteractive({ useHandCursor: true });
-
-      const txt = this.add.text(x, y - 16, emojis[k], { fontSize: "30px", fontFamily: UI_FONT }).setOrigin(0.5);
-
-      const set = () => {
-        if (this.ended || this.isPaused) return;
-        this.weapon = k;
-        this.sound.play("switch", { volume: 0.65 });
-        this.updateWeaponUI();
-        this.toast(this.weapons[k].label);
+    create() {
+      // Pack fallback
+      const pk = this.cache.json.get("pack") || {};
+      R.pack = {
+        title: pk.title || "DEMO 💘 DEMO",
+        subtitle: pk.subtitle || "Basit oynanış • aşırı iyi his • gösterince güldürür",
+        startHint: pk.startHint || "Ekrana dokun = vur • Alttan silah seç",
+        footer: pk.footer || "Kişiye özel: kafa foto + isimler + sesler",
+        names: pk.names || { attacker: "O", target: "O" },
       };
 
-      bg.on("pointerdown", set);
-      txt.setInteractive({ useHandCursor: true }).on("pointerdown", set);
-
-      this.weaponButtons[k] = { bg, txt };
-    });
-
-    this.updateWeaponUI();
-  }
-
-  /* ---------- Idle bob (combo hız) ---------- */
-  startIdleBobbing() {
-    this.stopIdleBobbing();
-
-    const t = Math.min(1, this.combo / 20);
-    const speed = 1 + t * 1.2;
-
-    this.idleGirlTween = this.tweens.add({
-      targets: this.girl,
-      y: this.girlHomeY - 6,
-      duration: 520,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut"
-    });
-
-    this.idleBodyTween = this.tweens.add({
-      targets: this.body,
-      y: this.bodyHomeY - 3,
-      duration: 650,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut"
-    });
-
-    this.idleFaceTween = this.tweens.add({
-      targets: this.face,
-      y: this.faceHomeY - 2,
-      duration: 650,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
-      delay: 80
-    });
-
-    this.idleGirlTween.timeScale = speed;
-    this.idleBodyTween.timeScale = speed;
-    this.idleFaceTween.timeScale = speed;
-  }
-
-  stopIdleBobbing() {
-    if (this.idleGirlTween) { this.idleGirlTween.stop(); this.idleGirlTween = null; }
-    if (this.idleBodyTween) { this.idleBodyTween.stop(); this.idleBodyTween = null; }
-    if (this.idleFaceTween) { this.idleFaceTween.stop(); this.idleFaceTween = null; }
-
-    if (this.girl) { this.girl.x = this.girlHomeX; this.girl.y = this.girlHomeY; this.girl.setAngle(0); }
-    if (this.body) this.body.y = this.bodyHomeY;
-    if (this.face) { this.face.y = this.faceHomeY; this.face.setAngle(0); this.face.setScale(1); this.face.setDisplaySize(this.faceBaseSize, this.faceBaseSize); }
-  }
-
-  /* ---------- Combat feel ---------- */
-  playWeaponSound() {
-    const w = this.weapons[this.weapon];
-    const key = Phaser.Utils.Array.GetRandom(w.sounds);
-    const rate = Phaser.Math.FloatBetween(0.95, 1.05);
-    this.sound.play(key, { volume: 0.9, rate });
-  }
-
-  spawnWeaponFx() {
-    const w = this.weapons[this.weapon];
-    const { width } = this.scale;
-
-    const startX = (this.girlHomeX < this.face.x) ? -20 : (width + 20);
-    const endX = this.face.x + Phaser.Math.Between(-10, 10);
-    const endY = this.face.y + Phaser.Math.Between(-5, 12);
-
-    const fx = this.add.text(startX, endY - 10, w.fx, { fontSize: "54px", fontFamily: UI_FONT }).setOrigin(0.5);
-    if (this.weapon === "pan") fx.setRotation(Phaser.Math.DegToRad(-20));
-    if (this.weapon === "slipper") fx.setRotation(Phaser.Math.DegToRad(10));
-
-    this.tweens.add({
-      targets: fx,
-      x: endX,
-      duration: (this.weapon === "pan") ? 120 : 95,
-      ease: "Quad.easeOut",
-      onComplete: () => fx.destroy()
-    });
-  }
-
-  spawnEmojiArm() {
-    const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
-    const sx = this.girlHomeX + dir * 55;
-    const sy = this.girlHomeY - 110;
-
-    const ex = this.face.x + Phaser.Math.Between(-12, 12);
-    const ey = this.face.y + Phaser.Math.Between(-6, 6);
-
-    const arm = this.add.text(sx, sy, "👊", { fontSize: "46px", fontFamily: UI_FONT }).setOrigin(0.5);
-    arm.setRotation(Phaser.Math.DegToRad(dir * -15));
-    arm.setDepth(9001);
-
-    this.tweens.add({
-      targets: arm,
-      x: ex,
-      y: ey,
-      duration: 95,
-      ease: "Quad.easeOut",
-      onComplete: () => arm.destroy()
-    });
-  }
-
-  spawnImpactFx() {
-    const x = this.face.x + Phaser.Math.Between(-25, 25);
-    const y = this.face.y + Phaser.Math.Between(-35, -10);
-
-    // Nadir meme sticker
-    const meme = Math.random() < 0.06 ? Phaser.Utils.Array.GetRandom(["💀","🤡","🫠","😵‍💫","😭"]) : "💥";
-
-    const impact = this.add.text(x, y, meme, { fontSize: "44px", fontFamily: UI_FONT }).setOrigin(0.5);
-    impact.setScale(0.8).setAlpha(0.95);
-
-    this.tweens.add({
-      targets: impact,
-      scale: 1.25,
-      alpha: 0,
-      duration: 140,
-      ease: "Quad.easeOut",
-      onComplete: () => impact.destroy()
-    });
-  }
-
-  hitScreenFlash() {
-    // premium: çok kısa, göz yormayan
-    this.hitFlash.setAlpha(0.06);
-    this.tweens.killTweensOf(this.hitFlash);
-    this.tweens.add({ targets: this.hitFlash, alpha: 0, duration: 95, ease: "Quad.easeOut" });
-  }
-
-  girlRecoil() {
-    this.tweens.killTweensOf(this.girl);
-    this.girl.x = this.girlHomeX;
-    this.girl.y = this.girlHomeY;
-
-    const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
-    const push = (this.weapon === "pan") ? 18 : (this.weapon === "slipper" ? 14 : (this.weapon === "slap" ? 12 : 8));
-    const tilt = (this.weapon === "pan") ? 10 : (this.weapon === "slipper" ? 8 : 6);
-
-    this.tweens.add({
-      targets: this.girl,
-      x: this.girlHomeX + dir * push,
-      angle: -dir * tilt,
-      duration: 70,
-      yoyo: true,
-      ease: "Quad.easeOut",
-      onComplete: () => {
-        this.girl.setAngle(0);
-        this.girl.x = this.girlHomeX;
-        this.girl.y = this.girlHomeY;
-      }
-    });
-  }
-
-  targetReaction() {
-    // shake
-    if (this.weapon === "pan") this.cameras.main.shake(210, 0.020);
-    else if (this.weapon === "slipper") this.cameras.main.shake(130, 0.013);
-    else if (this.weapon === "slap") this.cameras.main.shake(95, 0.010);
-    else this.cameras.main.shake(55, 0.006);
-
-    // face rotate reset
-    const amp = (this.weapon === "pan") ? 18 : (this.weapon === "slipper" ? 14 : 10);
-    const dur = (this.weapon === "pillow") ? 70 : 55;
-
-    this.tweens.add({
-      targets: this.face,
-      angle: { from: -amp, to: amp },
-      duration: dur,
-      yoyo: true,
-      repeat: 2,
-      onComplete: () => this.face.setAngle(0)
-    });
-
-    // body kick (no drift)
-    const bodyKick = (this.weapon === "pan") ? 6 : (this.weapon === "pillow" ? 2 : 3);
-    this.tweens.add({
-      targets: this.body,
-      y: this.bodyHomeY + bodyKick,
-      duration: 60,
-      yoyo: true,
-      ease: "Quad.easeOut",
-      onComplete: () => { this.body.y = this.bodyHomeY; }
-    });
-
-    // face scale (no growth bug)
-    this.tweens.add({
-      targets: this.face,
-      scaleX: 0.92,
-      scaleY: 1.06,
-      duration: 55,
-      yoyo: true,
-      ease: "Quad.easeOut",
-      onComplete: () => {
-        this.face.setScale(1);
-        this.face.setDisplaySize(this.faceBaseSize, this.faceBaseSize);
-      }
-    });
-  }
-
-  floatingScore(add) {
-    const baseTexts = this.pack.hitText || ["BONK!", "OF YA!", "YETER!", "YİNE Mİ?", "SUS LAN 😭", "KAFAN GİTTİ", "SABRIM TAŞTI"];
-    const flavor = {
-      slap: ["Paf!", "Şlap!", "Hop!"],
-      slipper: ["TERLİK!", "ŞAK!", "DING!"],
-      pillow: ["POF!", "Pıt!", "Yumuşak 😌"],
-      pan: ["CLANG!", "KÜT!", "TAVA!"]
-    };
-    const pool = [...baseTexts, ...flavor[this.weapon]];
-    const t = Phaser.Utils.Array.GetRandom(pool);
-
-    const txt = this.add.text(this.face.x, this.face.y - 150, `+${add}  ${t}`, {
-      fontFamily: UI_FONT, fontSize: "20px", color: "#fff", fontStyle: "800"
-    }).setOrigin(0.5).setShadow(0, 3, "#000", 12);
-
-    this.tweens.add({
-      targets: txt,
-      y: "-=30",
-      alpha: 0,
-      duration: 540,
-      onComplete: () => txt.destroy()
-    });
-  }
-
-  updateComboAndMultiplier() {
-    const now = this.time.now;
-
-    if (now - this.lastHitAt <= this.comboWindowMs) this.combo++;
-    else this.combo = 1;
-
-    this.lastHitAt = now;
-
-    if (this.combo >= 25) this.mult = 5;
-    else if (this.combo >= 15) this.mult = 3;
-    else if (this.combo >= 7) this.mult = 2;
-    else this.mult = 1;
-
-    if (this.combo > this.bestCombo) this.bestCombo = this.combo;
-    this.comboText.setText(`Combo: ${this.combo}  x${this.mult}`);
-  }
-
-  playTwoFrame(impactFn) {
-    this.tweens.killTweensOf(this.girl);
-    this.girl.x = this.girlHomeX;
-    this.girl.y = this.girlHomeY;
-
-    const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
-    const back = (this.weapon === "pan") ? 6 : (this.weapon === "slipper" ? 5 : 4);
-    const preTilt = (this.weapon === "pan") ? 4 : 3;
-
-    this.tweens.add({
-      targets: this.girl,
-      x: this.girlHomeX - dir * back,
-      angle: dir * preTilt,
-      duration: 45,
-      ease: "Quad.easeOut",
-      onComplete: () => {
-        this.tweens.add({
-          targets: this.face,
-          scaleX: 1.03,
-          scaleY: 0.97,
-          duration: 45,
-          yoyo: true,
-          ease: "Quad.easeOut",
-          onComplete: () => {
-            this.face.setScale(1);
-            this.face.setDisplaySize(this.faceBaseSize, this.faceBaseSize);
-          }
-        });
-
-        impactFn();
-
-        this.tweens.add({
-          targets: this.girl,
-          x: this.girlHomeX,
-          angle: 0,
-          duration: 70,
-          ease: "Quad.easeOut",
-          onComplete: () => {
-            this.girl.x = this.girlHomeX;
-            this.girl.y = this.girlHomeY;
-            this.girl.setAngle(0);
-          }
-        });
-      }
-    });
-  }
-
-  hit() {
-    if (this.ended || this.isPaused) return;
-    if (this.hitBusy) return;
-    this.hitBusy = true;
-
-    // hard safety reset
-    this.face.setScale(1);
-    this.face.setDisplaySize(this.faceBaseSize, this.faceBaseSize);
-    this.body.y = this.bodyHomeY;
-    this.face.y = this.faceHomeY;
-
-    this.totalHits++;
-
-    this.updateComboAndMultiplier();
-
-    const w = this.weapons[this.weapon];
-    const add = w.base * this.mult;
-
-    this.score += add;
-    this.scoreCountUp(this.score);
-
-    // anger up
-    this.anger = Math.min(100, this.anger + w.anger);
-    this.drawBar();
-
-    // JUICE!
-    this.hitStop(60);
-    this.impactRing();
-
-    const impact = () => {
-      this.spawnEmojiArm();
-      this.spawnWeaponFx();
-      this.spawnImpactFx();
-      this.hitScreenFlash();
-      this.girlRecoil();
-      this.targetReaction();
-      this.playWeaponSound();
-      this.floatingScore(add);
-    };
-
-    this.playTwoFrame(impact);
-
-    // end hit
-    this.time.delayedCall(130, () => {
-      this.hitBusy = false;
-      this.startIdleBobbing(); // combo hız güncelle
-    });
-  }
-
-  /* ---------- Pause overlay ---------- */
-  openPauseOverlay() {
-    if (this.ended || this.isPaused) return;
-    this.isPaused = true;
-    this.tweens.pauseAll();
-
-    const { width, height } = this.scale;
-    this.pauseLayer = this.add.container(0,0).setDepth(10000);
-
-    const dim = this.add.rectangle(width/2, height/2, width*1.6, height*1.6, 0x000000, 0.62).setInteractive();
-
-    const panelW = Math.min(360, width - 40);
-    const panelH = 300;
-    const p = this.add.graphics();
-    p.fillStyle(0x0b0b12, 0.92);
-    p.fillRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 22);
-    p.lineStyle(2, 0xffffff, 0.16);
-    p.strokeRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 22);
-
-    const title = this.makeText(width/2, height/2 - 115, "Duraklatıldı ⏸", 22, "#fff", "900").setOrigin(0.5);
-
-    const mkBtn = (y, label) => {
-      const w = panelW - 70, h = 48;
-      const g = this.add.graphics();
-      g.fillStyle(0xffffff, 0.12);
-      g.fillRoundedRect(width/2 - w/2, y - h/2, w, h, 16);
-      g.lineStyle(2, 0xffffff, 0.14);
-      g.strokeRoundedRect(width/2 - w/2, y - h/2, w, h, 16);
-
-      const t = this.makeText(width/2, y - 10, label, 16, "#fff", "900").setOrigin(0.5);
-      const hit = this.add.rectangle(width/2, y, w, h, 0x000000, 0.001).setInteractive({ useHandCursor:true });
-      return { hit, g, t };
-    };
-
-    const b1 = mkBtn(height/2 - 20, "Devam");
-    const b2 = mkBtn(height/2 + 40, "Tekrar Başla");
-    const b3 = mkBtn(height/2 + 100, "Ana Menü");
-
-    b1.hit.on("pointerdown", () => this.closePauseOverlay());
-    b2.hit.on("pointerdown", () => {
-      this.isPaused = false;
-      this.tweens.resumeAll();
-      this.scene.start("Game", { pack: this.pack });
-    });
-    b3.hit.on("pointerdown", () => {
-      this.isPaused = false;
-      this.tweens.resumeAll();
-      this.scene.start("Splash", { pack: this.pack });
-    });
-
-    this.pauseLayer.add([dim, p, title, b1.g, b1.t, b1.hit, b2.g, b2.t, b2.hit, b3.g, b3.t, b3.hit]);
-  }
-
-  closePauseOverlay() {
-    if (!this.isPaused) return;
-    this.isPaused = false;
-    if (this.pauseLayer) {
-      this.pauseLayer.destroy(true);
-      this.pauseLayer = null;
+      this.scene.start("Menu");
     }
-    this.tweens.resumeAll();
   }
 
-  endGame(reason) {
-    if (this.ended) return;
-    this.ended = true;
+  class MenuScene extends Phaser.Scene {
+    constructor() { super("Menu"); }
+    create() {
+      const { width, height } = this.scale;
 
-    this.stopIdleBobbing();
-    this.tweens.resumeAll();
-    this.isPaused = false;
-    if (this.pauseLayer) { this.pauseLayer.destroy(true); this.pauseLayer = null; }
+      // Background
+      this.bg = this.add.image(width/2, height/2, "bg").setDisplaySize(width, height).setDepth(-50);
 
-    const { width, height } = this.scale;
+      // Dark overlay card
+      const cardW = Math.min(420, width*0.88);
+      const cardH = Math.min(620, height*0.78);
+      const card = this.add.rectangle(width/2, height/2, cardW, cardH, 0x0b0f1a, 0.78);
+      card.setStrokeStyle(2, 0xffffff, 0.08);
+      card.setRadius(18);
 
-    this.add.rectangle(width/2, height/2, width*1.2, height*1.2, 0x000000, 0.60);
+      // Title
+      this.add.text(width/2, height*0.18, R.pack.title, {
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+        fontSize: "34px",
+        fontStyle: "800",
+        color: "#ffffff"
+      }).setOrigin(0.5);
 
-    const panelW = Math.min(360, width - 40);
-    const panelH = 380;
-    const p = this.add.graphics();
-    p.fillStyle(0x0b0b12, 0.93);
-    p.fillRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 22);
-    p.lineStyle(2, 0xffffff, 0.16);
-    p.strokeRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 22);
+      this.add.text(width/2, height*0.23, R.pack.subtitle, {
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+        fontSize: "14px",
+        color: "rgba(255,255,255,0.72)"
+      }).setOrigin(0.5);
 
-    this.makeText(width/2, height/2 - 160, reason, 22, "#fff", "900").setOrigin(0.5);
+      // Face preview (circle)
+      const faceSize = Math.min(160, width*0.34);
+      const faceX = width/2;
+      const faceY = height*0.33;
 
-    this.add.text(
-      width/2,
-      height/2 - 105,
-      `Skor: ${this.score}\nEn iyi combo: ${this.bestCombo}\nToplam vuruş: ${this.totalHits}`,
-      { fontFamily: UI_FONT, fontSize:"15px", color:"#ddd", align:"center", fontStyle:"700" }
-    ).setOrigin(0.5).setShadow(0, 3, "#000", 12);
+      const face = this.add.image(faceX, faceY, "face");
+      const maskG = this.make.graphics({ x: 0, y: 0, add: false });
+      maskG.fillStyle(0xffffff);
+      maskG.fillCircle(faceX, faceY, faceSize/2);
+      face.setMask(maskG.createGeometryMask());
+      face.setDisplaySize(faceSize, faceSize);
 
-    const mkBtn = (y, label) => {
-      const w = panelW - 70, h = 50;
-      const g = this.add.graphics();
-      g.fillStyle(0xffffff, 0.12);
-      g.fillRoundedRect(width/2 - w/2, y - h/2, w, h, 16);
-      g.lineStyle(2, 0xffffff, 0.14);
-      g.strokeRoundedRect(width/2 - w/2, y - h/2, w, h, 16);
-      const t = this.makeText(width/2, y - 10, label, 16, "#fff", "900").setOrigin(0.5);
-      const hit = this.add.rectangle(width/2, y, w, h, 0x000000, 0.001).setInteractive({ useHandCursor:true });
-      return { hit, g, t };
-    };
+      // subtle glow ring
+      const ring = this.add.graphics();
+      ring.lineStyle(3, 0xffffff, 0.18);
+      ring.strokeCircle(faceX, faceY, faceSize/2 + 6);
 
-    const b1 = mkBtn(height/2 + 70, "Tekrar Başla");
-    const b2 = mkBtn(height/2 + 130, "Ana Menü");
+      // Start button
+      const btnY = height*0.50;
+      const btnW = Math.min(320, width*0.70);
+      const btnH = 54;
 
-    b1.hit.on("pointerdown", () => this.scene.start("Game", { pack: this.pack }));
-    b2.hit.on("pointerdown", () => this.scene.start("Splash", { pack: this.pack }));
+      const btn = this.add.rectangle(width/2, btnY, btnW, btnH, 0xffffff, 0.12);
+      btn.setStrokeStyle(2, 0xffffff, 0.16);
+      btn.setRadius(14);
+      btn.setInteractive({ useHandCursor: true });
+
+      const btnText = this.add.text(width/2, btnY, "BAŞLA", {
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+        fontSize: "20px",
+        fontStyle: "800",
+        color: "#ffffff"
+      }).setOrigin(0.5);
+
+      this.add.text(width/2, btnY + 34, R.pack.startHint, {
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+        fontSize: "12px",
+        color: "rgba(255,255,255,0.65)"
+      }).setOrigin(0.5);
+
+      this.add.text(width/2, height*0.78, R.pack.footer, {
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+        fontSize: "12px",
+        color: "rgba(255,255,255,0.70)"
+      }).setOrigin(0.5);
+
+      // Couple preview (girl + body, small, side-by-side)
+      // Kız boyutu “taşıyor” demiştin → burada biraz küçülttüm.
+      const previewY = height*0.63;
+      const girl = this.add.image(width/2 - 70, previewY, "girlBase").setOrigin(0.5, 1);
+      girl.setScale(Math.min(0.30, width/900));
+
+      const body = this.add.image(width/2 + 70, previewY, "bodyBase").setOrigin(0.5, 1);
+      body.setScale(Math.min(0.34, width/900));
+
+      // music: start on first user gesture
+      const startMusic = () => {
+        if (R.musicStarted) return;
+        R.musicStarted = true;
+        if (!R.music) {
+          R.music = this.sound.add("musicIntro", { loop: true, volume: 0.55 });
+        }
+        if (!R.music.isPlaying) R.music.play();
+      };
+
+      const goGame = () => {
+        startMusic();
+        this.scene.start("Game");
+      };
+
+      btn.on("pointerdown", goGame);
+      this.input.once("pointerdown", startMusic);
+      this.input.keyboard?.once("keydown", startMusic);
+
+      // responsive
+      this.scale.on("resize", (s) => {
+        this.scene.restart();
+      });
+    }
   }
-}
 
-/* ---------------- BOOT ---------------- */
-(async () => {
-  const pack = await loadPack();
+  class GameScene extends Phaser.Scene {
+    constructor() { super("Game"); }
 
-  const game = new Phaser.Game({
+    create() {
+      const { width, height } = this.scale;
+
+      // Background
+      this.bg = this.add.image(width/2, height/2, "bg").setDisplaySize(width, height).setDepth(-50);
+
+      // state
+      this.score = 0;
+      this.combo = 0;
+      this.lastHitAt = 0;
+      this.anger = 1.0; // 0..1
+      this.pausedUI = null;
+
+      // Layout anchors
+      this.centerX = width/2;
+      this.centerY = height/2;
+
+      // Characters
+      // Body behind
+      this.body = this.add.image(this.centerX, height*0.80, "bodyBase").setOrigin(0.5, 1);
+      this.body.setScale(Math.min(0.60, width/520));
+
+      // Face (circle) above body neck
+      this.faceSize = Math.min(width, height) * 0.32; // sabit tutacağız, büyüme hatasını engeller
+      this.face = this.add.image(this.centerX, height*0.38, "face").setOrigin(0.5, 0.5);
+
+      this.faceMaskG = this.make.graphics({ x: 0, y: 0, add: false });
+      this.face.setMask(this._makeFaceMask());
+
+      this._fitFace();
+
+      // Girl in front
+      this.girl = this.add.image(this.centerX - width*0.20, height*0.92, "girlBase").setOrigin(0.5, 1);
+      this.girl.setScale(Math.min(0.72, width/520)); // oyun içi daha büyük kalsın
+
+      // Idle bobbing (combo hızlandırır)
+      this._startIdleTweens();
+
+      // HUD (premium-ish)
+      const font = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      this.txtScore = this.add.text(16, 14, `Skor: 0`, { fontFamily: font, fontSize: "20px", color: "#ffffff", fontStyle: "800" }).setDepth(50);
+      this.txtCombo = this.add.text(16, 40, `Combo: 0 x1`, { fontFamily: font, fontSize: "14px", color: "rgba(255,215,0,0.95)", fontStyle: "700" }).setDepth(50);
+      this.txtWeapon = this.add.text(width - 16, 40, `Silah: ${this._weaponLabel()}`, { fontFamily: font, fontSize: "14px", color: "rgba(255,255,255,0.85)", fontStyle: "700" }).setOrigin(1,0).setDepth(50);
+
+      // Pause button (biraz aşağı indirdim, yazıyla çakışmasın)
+      this.btnPause = this.add.text(width - 16, 72, "⏸", {
+        fontFamily: font, fontSize: "22px", color: "rgba(255,255,255,0.9)"
+      }).setOrigin(1,0).setDepth(60).setInteractive({ useHandCursor: true });
+
+      this.btnPause.on("pointerdown", () => this._openPause());
+
+      // Anger bar (right) - fill UP, decay fast when not hitting
+      this.angerX = width - 24;
+      this.angerY = height*0.22;
+      this.angerH = height*0.60;
+      this.angerW = 10;
+
+      this.angerBg = this.add.rectangle(this.angerX, this.angerY + this.angerH/2, this.angerW, this.angerH, 0xffffff, 0.10).setOrigin(0.5,0.5).setDepth(40);
+      this.angerFill = this.add.rectangle(this.angerX, this.angerY + this.angerH, this.angerW, 2, 0xff4d4d, 0.95).setOrigin(0.5,1).setDepth(41);
+
+      // Weapon buttons bottom
+      this._buildWeaponBar();
+
+      // Input: hit anywhere except UI
+      this.hitZone = this.add.zone(0, 0, width, height).setOrigin(0,0).setDepth(1);
+      this.hitZone.setInteractive();
+
+      this.hitZone.on("pointerdown", (p) => {
+        if (this._isPaused()) return;
+        // ignore if clicking on weapon buttons area
+        if (p.y > height - 120) return;
+        this._hit();
+      });
+
+      // start music on first interaction if not already
+      this.input.once("pointerdown", () => {
+        if (R.music && !R.music.isPlaying) R.music.play();
+      });
+
+      // update loop timer
+      this.time.addEvent({
+        delay: 50,
+        loop: true,
+        callback: () => this._tick(),
+      });
+
+      // Responsive resize
+      this.scale.on("resize", () => {
+        this.scene.restart();
+      });
+    }
+
+    // -----------------------------
+    // Face mask & sizing
+    // -----------------------------
+    _makeFaceMask() {
+      const { width, height } = this.scale;
+      this.faceMaskG.clear();
+      this.faceMaskG.fillStyle(0xffffff);
+      this.faceMaskG.fillCircle(this.face.x, this.face.y, this.faceSize/2);
+      return this.faceMaskG.createGeometryMask();
+    }
+
+    _fitFace() {
+      // Face size fixed to avoid “büyüyor” bug
+      this.face.setDisplaySize(this.faceSize, this.faceSize);
+    }
+
+    // -----------------------------
+    // Idle tweens
+    // -----------------------------
+    _startIdleTweens() {
+      const baseDur = 900;
+      const calcDur = () => clamp(baseDur - this.combo*18, 260, 900);
+
+      // clear old
+      if (this.idleTweens) this.idleTweens.forEach(t => t?.remove());
+      this.idleTweens = [];
+
+      const mkTween = (target, ampY) => {
+        const t = this.tweens.add({
+          targets: target,
+          y: target.y - ampY,
+          duration: calcDur(),
+          yoyo: true,
+          repeat: -1,
+          ease: "Sine.inOut",
+        });
+        this.idleTweens.push(t);
+      };
+
+      mkTween(this.girl, 10);
+      mkTween(this.body, 6);
+      mkTween(this.face, 7);
+    }
+
+    _refreshIdleSpeed() {
+      // restart tweens with new speed based on combo
+      this._startIdleTweens();
+    }
+
+    // -----------------------------
+    // Weapons UI
+    // -----------------------------
+    _weaponLabel() {
+      const w = WEAPONS.find(x => x.key === R.weaponKey) || WEAPONS[0];
+      return `${w.label} ${w.name}`;
+    }
+
+    _buildWeaponBar() {
+      const { width, height } = this.scale;
+      const barH = 98;
+      const pad = 14;
+      const gap = 10;
+      const btnSize = 72;
+
+      this.weaponBarBg = this.add.rectangle(width/2, height - barH/2, width, barH, 0x000000, 0.35).setDepth(100);
+      this.weaponBtns = [];
+
+      const totalW = WEAPONS.length * btnSize + (WEAPONS.length - 1) * gap;
+      let startX = width/2 - totalW/2 + btnSize/2;
+      const y = height - barH/2;
+
+      WEAPONS.forEach((w, i) => {
+        const x = startX + i * (btnSize + gap);
+
+        const box = this.add.rectangle(x, y, btnSize, btnSize, 0xffffff, 0.08).setDepth(110);
+        box.setStrokeStyle(2, 0xffffff, 0.10);
+        box.setRadius(14);
+        box.setInteractive({ useHandCursor: true });
+
+        const txt = this.add.text(x, y - 2, w.label, {
+          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+          fontSize: "30px",
+          color: "#ffffff"
+        }).setOrigin(0.5).setDepth(111);
+
+        const sel = this.add.rectangle(x, y, btnSize, btnSize, 0xffffff, 0).setDepth(112);
+        sel.setStrokeStyle(2, 0xffffff, 0.35);
+        sel.setRadius(14);
+        sel.setVisible(w.key === R.weaponKey);
+
+        box.on("pointerdown", () => {
+          if (this._isPaused()) return;
+          R.weaponKey = w.key;
+          this.sound.play("switchSfx", { volume: 0.35 });
+          this.txtWeapon.setText(`Silah: ${this._weaponLabel()}`);
+          this.weaponBtns.forEach(b => b.sel.setVisible(b.key === R.weaponKey));
+        });
+
+        this.weaponBtns.push({ key: w.key, box, txt, sel });
+      });
+
+      // little hint for mobile
+      if (isMobile()) {
+        this.add.text(16, this.scale.height - 118, "Alttan silah seç", {
+          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+          fontSize: "12px",
+          color: "rgba(255,255,255,0.55)"
+        }).setDepth(120);
+      }
+    }
+
+    // -----------------------------
+    // Game logic
+    // -----------------------------
+    _hit() {
+      const now = this.time.now;
+      const dt = now - this.lastHitAt;
+
+      // combo logic
+      if (dt < 900) this.combo += 1;
+      else this.combo = 1;
+
+      this.lastHitAt = now;
+
+      // anger fill
+      this.anger = clamp(this.anger + 0.055, 0, 1);
+
+      // scoring + weapon
+      const w = WEAPONS.find(x => x.key === R.weaponKey) || WEAPONS[0];
+      const mult = 1 + clamp(Math.floor(this.combo / 10), 0, 9); // x1..x10
+      this.score += w.score * mult;
+
+      // update hud
+      this.txtScore.setText(`Skor: ${this.score}`);
+      this.txtCombo.setText(`Combo: ${this.combo} x${mult}`);
+
+      // sounds (random)
+      const s = pick(w.sounds);
+      this.sound.play(s, { volume: 0.75 });
+
+      // camera shake
+      this.cameras.main.shake(90, w.shake / 1000);
+
+      // face reaction: quick scale + tiny rotation (then reset)
+      this.tweens.add({
+        targets: this.face,
+        scale: 1.0 * w.hitScale,
+        angle: Phaser.Math.Between(-6, 6),
+        duration: 70,
+        yoyo: true,
+        ease: "Quad.out",
+        onComplete: () => {
+          this.face.scale = 1;
+          this.face.angle = 0;
+        }
+      });
+
+      // body nudge (prevent “aşağı düşme” by always restoring)
+      const bodyY0 = this.body.y;
+      this.tweens.add({
+        targets: this.body,
+        y: bodyY0 + 3,
+        duration: 70,
+        yoyo: true,
+        ease: "Sine.inOut",
+        onComplete: () => { this.body.y = bodyY0; }
+      });
+
+      // girl “kayma” yok: sadece mini rotate
+      this.tweens.add({
+        targets: this.girl,
+        angle: Phaser.Math.Between(-4, 4),
+        duration: 60,
+        yoyo: true,
+        ease: "Sine.inOut",
+        onComplete: () => { this.girl.angle = 0; }
+      });
+
+      // idle speed increases with combo
+      this._refreshIdleSpeed();
+    }
+
+    _tick() {
+      if (this._isPaused()) return;
+
+      // anger decay: hızlı düşsün istemiştin
+      const now = this.time.now;
+      const since = now - this.lastHitAt;
+
+      // vurmayınca daha hızlı düşer; combo varsa daha da hızlı düşsün ki bastırsın
+      const baseDecay = 0.010; // per tick (~20 ticks/s => 0.2/s)
+      const extra = since > 800 ? 0.020 : 0.006;
+      const comboFactor = clamp(this.combo / 60, 0, 1) * 0.012;
+
+      this.anger = clamp(this.anger - (baseDecay + extra + comboFactor), 0, 1);
+
+      // update anger bar (fills UP)
+      const fillH = clamp(this.angerH * this.anger, 2, this.angerH);
+      this.angerFill.height = fillH;
+      this.angerFill.y = this.angerY + this.angerH;
+
+      // if anger empties, drop combo faster
+      if (this.anger <= 0.02 && this.combo > 0) {
+        this.combo = Math.max(0, this.combo - 1);
+        const mult = 1 + clamp(Math.floor(this.combo / 10), 0, 9);
+        this.txtCombo.setText(`Combo: ${this.combo} x${mult}`);
+        this._refreshIdleSpeed();
+      }
+
+      // keep face mask synced (because tweens move y)
+      this.face.setMask(this._makeFaceMask());
+    }
+
+    // -----------------------------
+    // Pause UI
+    // -----------------------------
+    _isPaused() {
+      return !!this.pausedUI;
+    }
+
+    _openPause() {
+      if (this._isPaused()) return;
+
+      const { width, height } = this.scale;
+      const font = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+
+      const overlay = this.add.rectangle(width/2, height/2, width, height, 0x000000, 0.55).setDepth(1000);
+      const panelW = Math.min(360, width*0.84);
+      const panelH = 260;
+
+      const panel = this.add.rectangle(width/2, height/2, panelW, panelH, 0x0b0f1a, 0.92).setDepth(1001);
+      panel.setStrokeStyle(2, 0xffffff, 0.10);
+      panel.setRadius(18);
+
+      const title = this.add.text(width/2, height/2 - 92, "Durduruldu", {
+        fontFamily: font, fontSize: "22px", color: "#ffffff", fontStyle: "800"
+      }).setOrigin(0.5).setDepth(1002);
+
+      const mkBtn = (y, text, onClick) => {
+        const w = panelW * 0.78;
+        const h = 46;
+        const r = this.add.rectangle(width/2, y, w, h, 0xffffff, 0.10).setDepth(1002);
+        r.setStrokeStyle(2, 0xffffff, 0.14);
+        r.setRadius(14);
+        r.setInteractive({ useHandCursor: true });
+        const t = this.add.text(width/2, y, text, {
+          fontFamily: font, fontSize: "16px", color: "#ffffff", fontStyle: "700"
+        }).setOrigin(0.5).setDepth(1003);
+
+        r.on("pointerdown", onClick);
+        return [r, t];
+      };
+
+      const y1 = height/2 - 20;
+      const y2 = height/2 + 38;
+      const y3 = height/2 + 96;
+
+      const resume = mkBtn(y1, "Devam", () => this._closePause());
+      const restart = mkBtn(y2, "Restart", () => { this._closePause(true); this.scene.restart(); });
+      const menu = mkBtn(y3, "Ana Menü", () => { this._closePause(true); this.scene.start("Menu"); });
+
+      this.pausedUI = [overlay, panel, title, ...resume, ...restart, ...menu];
+    }
+
+    _closePause(destroyOnly = false) {
+      if (!this.pausedUI) return;
+      this.pausedUI.forEach(o => o?.destroy());
+      this.pausedUI = null;
+      if (!destroyOnly) {
+        // noop
+      }
+    }
+  }
+
+  // -----------------------------
+  // Phaser config
+  // -----------------------------
+  const config = {
     type: Phaser.AUTO,
     parent: "game",
-    width: 390,
-    height: 844,
-    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    scene: [SplashScene, GameScene]
-  });
+    backgroundColor: "#000000",
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: 540,
+      height: 960
+    },
+    audio: {
+      disableWebAudio: false
+    },
+    scene: [BootScene, MenuScene, GameScene],
+  };
 
-  game.scene.start("Splash", { pack });
+  // Ensure #game exists
+  if (!document.getElementById("game")) {
+    const d = document.createElement("div");
+    d.id = "game";
+    document.body.style.margin = "0";
+    document.body.appendChild(d);
+  }
+
+  new Phaser.Game(config);
 })();
