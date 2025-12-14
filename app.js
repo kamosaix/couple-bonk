@@ -1,8 +1,8 @@
 (() => {
   // =========================
-  // AYARLAR (GEREKİRSE SADECE BURAYI DEĞİŞTİR)
+  // AYARLAR
   // =========================
-  const BG_PATH = "/assets/bg_intro.jpg"; // sende bg_intro.jpg var diye buna ayarlı. bg.jpg ise "/assets/bg.jpg" yap.
+  const BG_PATH = "/assets/bg_intro.jpg";     // sende bg_intro.jpg var
   const MUSIC_PATH = "/assets/music_intro.mp3";
 
   // =========================
@@ -33,6 +33,7 @@
     weaponKey: "hand",
     music: null,
     musicStarted: false,
+    faceKey: "faceDemo",
   };
 
   function rr(scene, x, y, w, h, r, fill=0x0b0f1a, alpha=0.78, stroke=0xffffff, strokeAlpha=0.10, depth=0) {
@@ -53,13 +54,12 @@
     return mg.createGeometryMask();
   }
 
-  function safeText(scene, x, y, text, size=16, color="#fff", style="700", align="left") {
+  function t(scene, x, y, text, size=16, color="#fff", weight="800") {
     return scene.add.text(x, y, text, {
       fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
       fontSize: `${size}px`,
       color,
-      fontStyle: style,
-      align,
+      fontStyle: weight,
     });
   }
 
@@ -77,13 +77,15 @@
     constructor() { super("Boot"); }
 
     preload() {
-      // --- Core assets
+      const { width, height } = this.scale;
+
+      // Core
       this.load.image("bg", BG_PATH);
       this.load.image("girlBase", "/assets/girl_base.png");
       this.load.image("bodyBase", "/assets/body_base.png");
       this.load.audio("musicIntro", MUSIC_PATH);
 
-      // --- Sounds
+      // Sounds
       this.load.audio("slap1", "/sounds/slap1.mp3");
       this.load.audio("slap2", "/sounds/slap2.mp3");
       this.load.audio("slap3", "/sounds/slap3.mp3");
@@ -98,29 +100,25 @@
 
       this.load.audio("switchSfx", "/sounds/switch.mp3");
 
-      // --- Always load DEMO as fallback
+      // Packs
       this.load.json("packDemo", DEMO_JSON);
       this.load.image("faceDemo", DEMO_FACE);
 
-      // --- Try custom pack
       this.load.json("packCustom", PACK_JSON);
       this.load.image("faceCustom", PACK_FACE);
 
-      // --- Loading UI
-      const { width, height } = this.scale;
-      safeText(this, width/2, height*0.42, "Yükleniyor…", 22, "#fff", "800").setOrigin(0.5);
+      // Loading UI
+      t(this, width/2, height*0.42, "Yükleniyor…", 22, "#fff", "900").setOrigin(0.5);
 
       const barW = Math.min(320, width*0.7);
-      const barBg = this.add.rectangle(width/2, height*0.50, barW, 10, 0xffffff, 0.15);
+      this.add.rectangle(width/2, height*0.50, barW, 10, 0xffffff, 0.15);
       const barFill = this.add.rectangle(width/2 - barW/2, height*0.50, 2, 10, 0xffffff, 0.9).setOrigin(0,0.5);
 
       this.load.on("progress", (p) => { barFill.width = clamp(barW * p, 2, barW); });
-
-      // Debug (takılırsa konsolda gör)
       this.load.on("loaderror", (file) => console.warn("LOAD ERROR:", file?.key, file?.src));
       this.load.on("fileerror", (file) => console.warn("FILE ERROR:", file?.key, file?.src));
 
-      // Fail-safe: 7 sn sonra menuye geç (browser cache delirebiliyor)
+      // Fail-safe
       setTimeout(() => {
         try { if (this.scene.isActive("Boot")) this.scene.start("Menu"); } catch(e) {}
       }, 7000);
@@ -138,8 +136,7 @@
         footer: pk.footer || "Kişiye özel: kafa foto + isimler + sesler",
       };
 
-      // Decide which face loaded
-      const hasCustomFace = this.textures.exists("faceCustom") && this.textures.get("faceCustom").key === "faceCustom";
+      const hasCustomFace = this.textures.exists("faceCustom");
       R.faceKey = hasCustomFace ? "faceCustom" : "faceDemo";
 
       this.scene.start("Menu");
@@ -153,28 +150,46 @@
       const { width, height } = this.scale;
 
       // BG
-      this.add.image(width/2, height/2, "bg").setDisplaySize(width, height).setDepth(-50);
+      this.add.image(width/2, height/2, "bg")
+        .setDisplaySize(width, height)
+        .setDepth(-100);
 
       // Card
       const cardW = Math.min(420, width*0.88);
       const cardH = Math.min(620, height*0.78);
-      rr(this, width/2, height/2, cardW, cardH, 18, 0x0b0f1a, 0.78, 0xffffff, 0.08, 0);
+
+      // MENÜ PREVIEW: kartın ARKASINDA + küçük + altta
+      // (kanka bu kısım yüzünden görüntü çorba olmuştu, şimdi kesin temiz)
+      const previewY = height*0.86;
+      const previewGirl = this.add.image(width/2 - 60, previewY, "girlBase")
+        .setOrigin(0.5, 1)
+        .setScale(Math.min(0.20, width/1200))
+        .setDepth(-20)
+        .setAlpha(0.92);
+
+      const previewBody = this.add.image(width/2 + 60, previewY, "bodyBase")
+        .setOrigin(0.5, 1)
+        .setScale(Math.min(0.22, width/1100))
+        .setDepth(-20)
+        .setAlpha(0.92);
+
+      // Kart ÖNDE
+      rr(this, width/2, height/2, cardW, cardH, 18, 0x0b0f1a, 0.82, 0xffffff, 0.10, 10);
 
       // Title
-      safeText(this, width/2, height*0.18, R.pack.title, 34, "#fff", "900").setOrigin(0.5);
-      safeText(this, width/2, height*0.23, R.pack.subtitle, 14, "rgba(255,255,255,0.72)", "700").setOrigin(0.5);
+      t(this, width/2, height*0.18, R.pack.title, 34, "#fff", "900").setOrigin(0.5).setDepth(20);
+      t(this, width/2, height*0.23, R.pack.subtitle, 14, "rgba(255,255,255,0.72)", "800").setOrigin(0.5).setDepth(20);
 
       // Face preview
       const faceSize = Math.min(160, width*0.34);
       const faceX = width/2;
       const faceY = height*0.33;
 
-      const face = this.add.image(faceX, faceY, R.faceKey);
+      const face = this.add.image(faceX, faceY, R.faceKey).setDepth(20);
       face.setDisplaySize(faceSize, faceSize);
       face.setMask(circleMask(this, faceX, faceY, faceSize/2));
 
-      // Ring
-      const ring = this.add.graphics();
+      const ring = this.add.graphics().setDepth(21);
       ring.lineStyle(3, 0xffffff, 0.18);
       ring.strokeCircle(faceX, faceY, faceSize/2 + 6);
 
@@ -183,26 +198,18 @@
       const btnW = Math.min(320, width*0.70);
       const btnH = 54;
 
-      rr(this, width/2, btnY, btnW, btnH, 14, 0xffffff, 0.12, 0xffffff, 0.16, 2);
+      rr(this, width/2, btnY, btnW, btnH, 14, 0xffffff, 0.12, 0xffffff, 0.18, 30);
 
       const btnHit = this.add.rectangle(width/2, btnY, btnW, btnH, 0x000000, 0)
         .setInteractive({ useHandCursor: true })
-        .setDepth(10);
+        .setDepth(40);
 
-      safeText(this, width/2, btnY, "BAŞLA", 20, "#fff", "900").setOrigin(0.5).setDepth(11);
-      safeText(this, width/2, btnY+34, R.pack.startHint, 12, "rgba(255,255,255,0.65)", "700").setOrigin(0.5);
+      t(this, width/2, btnY, "BAŞLA", 20, "#fff", "900").setOrigin(0.5).setDepth(41);
+      t(this, width/2, btnY+34, R.pack.startHint, 12, "rgba(255,255,255,0.65)", "800").setOrigin(0.5).setDepth(41);
 
-      safeText(this, width/2, height*0.78, R.pack.footer, 12, "rgba(255,255,255,0.70)", "700").setOrigin(0.5);
+      t(this, width/2, height*0.78, R.pack.footer, 12, "rgba(255,255,255,0.70)", "800").setOrigin(0.5).setDepth(20);
 
-      // Small couple preview (kız biraz küçük)
-      const previewY = height*0.64;
-      const girl = this.add.image(width/2 - 70, previewY, "girlBase").setOrigin(0.5, 1);
-      girl.setScale(Math.min(0.28, width/900));
-
-      const body = this.add.image(width/2 + 70, previewY, "bodyBase").setOrigin(0.5, 1);
-      body.setScale(Math.min(0.32, width/900));
-
-      // Music start on first gesture
+      // music start on first gesture
       const go = () => { startMusic(this); this.scene.start("Game"); };
       btnHit.on("pointerdown", go);
       this.input.once("pointerdown", () => startMusic(this));
@@ -217,10 +224,9 @@
 
     create() {
       const { width, height } = this.scale;
-      const font = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
 
       // BG
-      this.add.image(width/2, height/2, "bg").setDisplaySize(width, height).setDepth(-50);
+      this.add.image(width/2, height/2, "bg").setDisplaySize(width, height).setDepth(-100);
 
       // State
       this.score = 0;
@@ -229,34 +235,46 @@
       this.anger = 1.0;
       this.pausedUI = null;
 
-      // Characters
-      this.bodyBaseY = height*0.82;
-      this.faceBaseY = height*0.38;
-      this.girlBaseY = height*0.92;
+      // Layout anchors
+      const centerX = width/2;
+      const girlX = centerX - width*0.22;
 
-      this.body = this.add.image(width/2, this.bodyBaseY, "bodyBase").setOrigin(0.5, 1);
-      this.body.setScale(Math.min(0.60, width/520));
+      const bodyY = height*0.84;
+      const faceY = height*0.38;
+      const girlY = height*0.93;
 
-      this.faceSize = Math.min(width, height) * 0.32;
-      this.face = this.add.image(width/2, this.faceBaseY, R.faceKey).setOrigin(0.5,0.5);
+      // Scales (daha stabil, telefonda devleşmez)
+      const baseScale = clamp(width / 540, 0.85, 1.15);
+      const bodyScale = 0.58 * baseScale;
+      const girlScale = 0.68 * baseScale;
+
+      // Body (alt sabit)
+      this.body = this.add.image(centerX, bodyY, "bodyBase").setOrigin(0.5, 1);
+      this.body.setScale(bodyScale);
+
+      // Face circle
+      this.faceSize = Math.min(width, height) * 0.30;
+      this.face = this.add.image(centerX, faceY, R.faceKey).setOrigin(0.5,0.5);
       this.face.setDisplaySize(this.faceSize, this.faceSize);
       this.face.setMask(circleMask(this, this.face.x, this.face.y, this.faceSize/2));
 
-      this.girl = this.add.image(width/2 - width*0.20, this.girlBaseY, "girlBase").setOrigin(0.5, 1);
-      this.girl.setScale(Math.min(0.72, width/520));
+      // Girl
+      this.girl = this.add.image(girlX, girlY, "girlBase").setOrigin(0.5, 1);
+      this.girl.setScale(girlScale);
 
-      // Idle tweens (asla durmasın, sadece hızlansın)
+      // Idle tweens (asla durmasın)
       this.idleGirl = this.tweens.add({ targets: this.girl, y: this.girl.y - 10, duration: 900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
       this.idleBody = this.tweens.add({ targets: this.body, y: this.body.y - 6,  duration: 900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
       this.idleFace = this.tweens.add({ targets: this.face, y: this.face.y - 7,  duration: 900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
       // HUD
-      this.txtScore  = this.add.text(16, 14, "Skor: 0", { fontFamily: font, fontSize: "20px", color: "#fff", fontStyle: "800" }).setDepth(80);
-      this.txtCombo  = this.add.text(16, 40, "Combo: 0 x1", { fontFamily: font, fontSize: "14px", color: "rgba(255,215,0,0.95)", fontStyle: "800" }).setDepth(80);
-      this.txtWeapon = this.add.text(width-16, 40, `Silah: ${this._weaponLabel()}`, { fontFamily: font, fontSize: "14px", color: "rgba(255,255,255,0.85)", fontStyle: "800" }).setOrigin(1,0).setDepth(80);
+      this.txtScore  = t(this, 16, 14, "Skor: 0", 20, "#fff", "900").setDepth(80);
+      this.txtCombo  = t(this, 16, 40, "Combo: 0 x1", 14, "rgba(255,215,0,0.95)", "900").setDepth(80);
+      this.txtWeapon = t(this, width-16, 40, `Silah: ${this._weaponLabel()}`, 14, "rgba(255,255,255,0.85)", "900")
+        .setOrigin(1,0).setDepth(80);
 
       // Pause (biraz aşağı)
-      this.btnPause = this.add.text(width-16, 72, "⏸", { fontFamily: font, fontSize: "22px", color: "rgba(255,255,255,0.9)" })
+      this.btnPause = t(this, width-16, 72, "⏸", 22, "rgba(255,255,255,0.9)", "900")
         .setOrigin(1,0).setDepth(90).setInteractive({ useHandCursor:true });
       this.btnPause.on("pointerdown", () => this._openPause());
 
@@ -295,7 +313,6 @@
     }
 
     _setIdleSpeed() {
-      // Combo arttıkça hızlansın: timeScale
       const speed = clamp(1 + this.combo / 25, 1, 3.2);
       this.idleGirl.timeScale = speed;
       this.idleBody.timeScale = speed;
@@ -343,11 +360,7 @@
       });
 
       if (isMobile()) {
-        this.add.text(16, height - 118, "Alttan silah seç", {
-          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-          fontSize: "12px",
-          color: "rgba(255,255,255,0.55)"
-        }).setDepth(240);
+        t(this, 16, height - 118, "Alttan silah seç", 12, "rgba(255,255,255,0.55)", "800").setDepth(240);
       }
     }
 
@@ -377,7 +390,7 @@
       // Shake
       this.cameras.main.shake(90, w.shake/1000);
 
-      // Face pop (no growth bug: always returns to 1)
+      // Face pop (no growth bug)
       this.tweens.add({
         targets: this.face,
         scale: w.hitScale,
@@ -412,7 +425,7 @@
       // Idle speed up
       this._setIdleSpeed();
 
-      // Mask follow (because idle moves y)
+      // Mask follow
       this.face.setMask(circleMask(this, this.face.x, this.face.y, this.faceSize/2));
     }
 
@@ -440,7 +453,6 @@
         this._setIdleSpeed();
       }
 
-      // Keep mask synced with idle
       this.face.setMask(circleMask(this, this.face.x, this.face.y, this.faceSize/2));
     }
 
@@ -450,12 +462,11 @@
       if (this._isPaused()) return;
 
       const { width, height } = this.scale;
-      const font = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
 
       const overlay = this.add.rectangle(width/2, height/2, width, height, 0x000000, 0.55).setDepth(1000);
       rr(this, width/2, height/2, Math.min(360, width*0.84), 260, 18, 0x0b0f1a, 0.92, 0xffffff, 0.10, 1001);
 
-      const title = this.add.text(width/2, height/2 - 92, "Durduruldu", { fontFamily: font, fontSize: "22px", color: "#fff", fontStyle: "900" })
+      const title = t(this, width/2, height/2 - 92, "Durduruldu", 22, "#fff", "900")
         .setOrigin(0.5).setDepth(1002);
 
       const mkBtn = (y, text, onClick) => {
@@ -463,17 +474,15 @@
         const bh = 46;
         rr(this, width/2, y, bw, bh, 14, 0xffffff, 0.10, 0xffffff, 0.14, 1002);
         const hit = this.add.rectangle(width/2, y, bw, bh, 0x000000, 0).setDepth(1003).setInteractive({ useHandCursor:true });
-        const t = this.add.text(width/2, y, text, { fontFamily: font, fontSize: "16px", color: "#fff", fontStyle: "800" })
-          .setOrigin(0.5).setDepth(1004);
+        const txt = t(this, width/2, y, text, 16, "#fff", "900").setOrigin(0.5).setDepth(1004);
         hit.on("pointerdown", onClick);
-        return [hit, t];
+        return [hit, txt];
       };
 
       const y1 = height/2 - 20, y2 = height/2 + 38, y3 = height/2 + 96;
-
       const a = mkBtn(y1, "Devam", () => this._closePause());
-      const b = mkBtn(y2, "Restart", () => { this._closePause(true); this.scene.restart(); });
-      const c = mkBtn(y3, "Ana Menü", () => { this._closePause(true); this.scene.start("Menu"); });
+      const b = mkBtn(y2, "Restart", () => { this._closePause(); this.scene.restart(); });
+      const c = mkBtn(y3, "Ana Menü", () => { this._closePause(); this.scene.start("Menu"); });
 
       this.pausedUI = [overlay, title, ...a, ...b, ...c];
     }
