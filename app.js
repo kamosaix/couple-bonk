@@ -384,6 +384,7 @@ class GameScene extends Phaser.Scene {
     this.girlHomeY = this.girl.y;
     this.bodyHomeY = this.body.y;
     this.faceHomeY = this.face.y;
+    this.faceHomeX = this.face.x;
 
     this.hitFlash = this.add.rectangle(width/2, height/2, width, height, 0xffffff, 0).setDepth(9999);
 
@@ -441,6 +442,104 @@ class GameScene extends Phaser.Scene {
       this.hit();
     });
   }
+
+  /* ---------- NEW: “vurmayı hissettir” efekt seti ---------- */
+  spawnBruise() {
+    const comboBoost = Math.min(1.0, this.combo / 18);
+    const alpha = 0.18 + comboBoost * 0.14;
+
+    const x = this.face.x + Phaser.Math.Between(-30, 30);
+    const y = this.face.y + Phaser.Math.Between(-12, 28);
+
+    const g = this.add.graphics().setDepth(8000);
+    g.fillStyle(0xff2d55, alpha);
+    g.fillCircle(x, y, Phaser.Math.Between(18, 28));
+    g.fillStyle(0x7a1b2a, alpha * 0.55);
+    g.fillCircle(x + 6, y + 4, Phaser.Math.Between(10, 18));
+
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 680,
+      ease: "Quad.easeOut",
+      onComplete: () => g.destroy()
+    });
+  }
+
+  faceFlash() {
+    const s = this.add.circle(
+      this.face.x,
+      this.face.y,
+      this.faceBaseSize * 0.52,
+      0xffffff,
+      0.10
+    ).setDepth(7999);
+
+    this.tweens.add({
+      targets: s,
+      alpha: 0,
+      duration: 120,
+      ease: "Quad.easeOut",
+      onComplete: () => s.destroy()
+    });
+  }
+
+  spawnSparks() {
+    const n = 6 + Math.min(6, Math.floor(this.combo / 6));
+    for (let i = 0; i < n; i++) {
+      const p = this.add.circle(
+        this.face.x + Phaser.Math.Between(-10, 10),
+        this.face.y + Phaser.Math.Between(-10, 10),
+        Phaser.Math.Between(2, 4),
+        0xffffff,
+        0.92
+      ).setDepth(8001);
+
+      this.tweens.add({
+        targets: p,
+        x: `+=${Phaser.Math.Between(-46, 46)}`,
+        y: `+=${Phaser.Math.Between(-46, 34)}`,
+        alpha: 0,
+        duration: Phaser.Math.Between(170, 260),
+        ease: "Quad.easeOut",
+        onComplete: () => p.destroy()
+      });
+    }
+  }
+
+  cameraKick(dir) {
+    const cam = this.cameras.main;
+    cam.scrollX = 0;
+    this.tweens.add({
+      targets: cam,
+      scrollX: dir * 10,
+      duration: 55,
+      yoyo: true,
+      ease: "Quad.easeOut",
+      onComplete: () => cam.setScroll(0, 0)
+    });
+  }
+
+  faceDisplace(dir) {
+    // vurulan yön hissi: yüz hafif kayıp geri gelsin
+    const kick =
+      (this.weapon === "pan") ? 10 :
+      (this.weapon === "slipper") ? 8 :
+      (this.weapon === "slap") ? 6 : 4;
+
+    this.tweens.killTweensOf(this.face);
+    this.face.x = this.faceHomeX;
+
+    this.tweens.add({
+      targets: this.face,
+      x: this.faceHomeX + dir * kick,
+      duration: 45,
+      yoyo: true,
+      ease: "Quad.easeOut",
+      onComplete: () => { this.face.x = this.faceHomeX; }
+    });
+  }
+  /* -------------------------------------------------------- */
 
   hitStop(ms = 60) {
     const prev = this.tweens.timeScale ?? 1;
@@ -616,6 +715,7 @@ class GameScene extends Phaser.Scene {
     if (this.girl) { this.girl.x = this.girlHomeX; this.girl.y = this.girlHomeY; this.girl.setAngle(0); }
     if (this.body) this.body.y = this.bodyHomeY;
     if (this.face) {
+      this.face.x = this.faceHomeX;
       this.face.y = this.faceHomeY;
       this.face.setAngle(0);
       this.face.setScale(1);
@@ -839,6 +939,7 @@ class GameScene extends Phaser.Scene {
     this.face.setDisplaySize(this.faceBaseSize, this.faceBaseSize);
     this.body.y = this.bodyHomeY;
     this.face.y = this.faceHomeY;
+    this.face.x = this.faceHomeX;
 
     this.totalHits++;
     this.updateComboAndMultiplier();
@@ -852,10 +953,23 @@ class GameScene extends Phaser.Scene {
     this.anger = Math.min(100, this.anger + w.anger);
     this.drawBar();
 
-    this.hitStop(60);
+    const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
+
+    // silaha göre daha tok hitStop
+    const hs = (this.weapon === "pan") ? 90 : (this.weapon === "slipper") ? 75 : (this.weapon === "slap") ? 62 : 55;
+    this.hitStop(hs);
+
     this.impactRing();
 
     const impact = () => {
+      // NEW: görsel "vuruldu" hissi
+      this.faceFlash();
+      this.spawnBruise();
+      this.spawnSparks();
+      this.cameraKick(dir);
+      this.faceDisplace(dir);
+
+      // mevcut efektler
       this.spawnWeaponFx();
       this.spawnImpactFx();
       this.hitScreenFlash();
