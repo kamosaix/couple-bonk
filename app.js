@@ -201,7 +201,7 @@ class SplashScene extends Phaser.Scene {
     card.strokeRoundedRect(cardX - cardW / 2, cardY - cardH / 2, cardW, cardH, 22);
 
     const rawTitle = (this.pack.title || "").trim();
-    const title = (!rawTitle || /demo/i.test(rawTitle)) ? "Ayşe Mehmet" : rawTitle;
+    const title = (!rawTitle || /demo/i.test(rawTitle)) ? "Ayşe ❤️ Mehmet" : rawTitle;
     this.add.text(width / 2, cardY - 270, title, {
       fontFamily: UI_FONT, fontSize: "28px", color: "#fff", fontStyle: "800"
     }).setOrigin(0.5).setShadow(0, 3, "#000", 12);
@@ -231,9 +231,9 @@ class SplashScene extends Phaser.Scene {
       fontFamily: UI_FONT, fontSize: "12px", color: "#ffd1f3", fontStyle: "900"
     }).setOrigin(0.5, 0);
 
-    this.add.text(rightX, frameY - frameH / 2 + 10, boyName, {
+    this.add.text(rightX, frameY - frameH / 2 + 10, "", {
       fontFamily: UI_FONT, fontSize: "12px", color: "#cfe8ff", fontStyle: "900"
-    }).setOrigin(0.5, 0);
+    }).setOrigin(0.5, 0).setAlpha(0);
 
     // Girl preview
     const girl = this.add.image(leftX, frameY + frameH / 2 - 18, "girl_base");
@@ -407,7 +407,7 @@ class GameScene extends Phaser.Scene {
     this.weapons = {
       slap:    { label: "👋 Tokat",  base: 1, anger: 1, sounds: ["slap1","slap2","slap3"], fx: "👋" },
       slipper: { label: "🥿 Terlik", base: 2, anger: 2, sounds: ["slipper1","slipper2","slipper3"], fx: "🥿" },
-      pillow:  { label: "🛋️ Yastık", base: 3, anger: 1, sounds: ["pillow1","pillow2","pillow3"], fx: "🛋️" },
+      pillow:  { label: "☁️ Yastık", base: 3, anger: 1, sounds: ["pillow1","pillow2","pillow3"], fx: "☁️" },
       pan:     { label: "🍳 Tava",   base: 5, anger: 4, sounds: ["pan1","pan2","pan3"], fx: "🍳" }
     };
 
@@ -557,12 +557,24 @@ class GameScene extends Phaser.Scene {
   /* -------------------------------------------------------- */
 
   hitStop(ms = 60) {
-    const prev = this.tweens.timeScale ?? 1;
+    // Mobilde setTimeout bazen kafayı yiyor (tab arka plana gidince vs) → tween timeScale düşük kalıp
+    // “karakter durdu” gibi hissettiriyor. Phaser time ile garanti geri alıyoruz.
+    const prev = (typeof this.tweens.timeScale === "number") ? this.tweens.timeScale : 1;
+
+    // önceki geri-al event'i varsa iptal et
+    if (this.__hitStopEvent && this.__hitStopEvent.remove) {
+      this.__hitStopEvent.remove(false);
+      this.__hitStopEvent = null;
+    }
+
     this.tweens.timeScale = 0.08;
-    window.setTimeout(() => {
-      if (this.ended) return;
+
+    // Phaser clock ile geri al
+    this.__hitStopEvent = this.time.delayedCall(ms, () => {
+      // scene kapanmış olabilir
+      if (!this.tweens) return;
       this.tweens.timeScale = prev;
-    }, ms);
+    });
   }
 
   impactRing() {
@@ -649,7 +661,7 @@ class GameScene extends Phaser.Scene {
     g.strokeRoundedRect(10, barY + 10, width - 20, this.bottomBarH - 20, 22);
 
     const keys = ["slap", "slipper", "pillow", "pan"];
-    const emojis = { slap: "👋", slipper: "🥿", pillow: "🛋️", pan: "🍳" };
+    const emojis = { slap: "👋", slipper: "🥿", pillow: "☁️", pan: "🍳" };
     const pad = 14;
     const btnW = (width - pad * (keys.length + 1)) / keys.length;
     const btnH = this.bottomBarH - 36;
