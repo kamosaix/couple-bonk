@@ -709,6 +709,10 @@ enterRageSelection() {
   const nowOpen = this.time.now;
   this.rageSelectionOpenedAt = nowOpen;
 
+  // 🎵 Rage ekranı çıkar çıkmaz müzik girsin (seçim beklemeden)
+  this.pauseMainBgmForRage();
+  this.playRageBgm();
+
   // Arka plan GÖZÜKSÜN: hafif karart + input'u yut
   if (this.rageDim) this.rageDim.destroy();
   this.rageDim = this.add
@@ -1664,6 +1668,10 @@ if (this.weaponButtons) {
   playRageBgm() {
   // Rage müziği yoksa oyun patlamasın
   if (!this.cache?.audio?.exists || !this.cache.audio.exists("bgm_rage")) return;
+
+  // Zaten çalıyorsa restart yapma (seçim ekranında da başlatıyoruz)
+  const existing = window.__COUPLE_BONK_RAGE_BGM;
+  if (existing && existing.isPlaying) return;
 
   // Eski rage bgm varsa kapat
   const old = window.__COUPLE_BONK_RAGE_BGM;
