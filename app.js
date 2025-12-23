@@ -733,6 +733,9 @@ this.tweens.killTweensOf(this.face);
     bg.lineStyle(2, 0xffffff, 0.14);
     bg.strokeRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 24);
 
+    // BG en arkada kalsın (butonları ezmesin)
+    this.ragePanel.add(bg);
+
     // Başlık – büyük, stroke'lu, okunur
     const t = this.add.text(width/2, height/2 - panelH/2 + 44, "RAGE MODE", {
       fontFamily: UI_FONT,
@@ -846,7 +849,7 @@ this.tweens.killTweensOf(this.face);
       align: "center"
     }).setOrigin(0.5).setShadow(0, 2, "#000", 10);
 
-    this.ragePanel.add([bg, t, sub, hint]);
+    this.ragePanel.add([t, sub, hint]);
   }
 
 
