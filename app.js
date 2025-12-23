@@ -224,8 +224,8 @@ class SplashScene extends Phaser.Scene {
     drawBox(leftX);
     drawBox(rightX);
 
-    const girlName = this.pack.girlName || "SEN";
-    const boyName  = this.pack.boyName  || "O";
+    const girlName = this.pack.girlName || "Ayşe";
+    const boyName  = this.pack.boyName  || "Mehmet";
 
     this.add.text(leftX, frameY - frameH / 2 + 10, girlName, {
       fontFamily: UI_FONT, fontSize: "12px", color: "#ffd1f3", fontStyle: "900"
@@ -348,9 +348,9 @@ class GameScene extends Phaser.Scene {
     this.scoreText = this.makeText(24, 16, "Skor: 0", 18, "#fff", "900").setOrigin(0,0);
     this.comboText = this.makeText(24, 42, "Combo: 0  x1", 13, "#ffcc00", "800").setOrigin(0,0);
 
-    const girlName = this.pack.girlName || "SEN";
-    const boyName  = this.pack.boyName  || "O";
-    this.nameText = this.makeText(24, 64, `${girlName} vs ${boyName}`, 12, "#d9d9ff", "700").setOrigin(0,0);
+    const girlName = this.pack.girlName || "Ayşe";
+    const boyName  = this.pack.boyName  || "Mehmet";
+    this.nameText = this.makeText(24, 64, `${girlName} ❤️ ${boyName}`, 12, "#d9d9ff", "700").setOrigin(0,0);
 
     this.timeText = this.makeText(width - 22, 16, `${this.timeLeft}s`, 18, "#fff", "900").setOrigin(1,0);
     this.weaponLabel = this.makeText(width - 22, 42, "", 13, "#b7e3ff", "800").setOrigin(1,0);
@@ -735,9 +735,9 @@ class GameScene extends Phaser.Scene {
   }
 
   stopIdleBobbing() {
-    if (this.idleGirlTween) { this.idleGirlTween.stop(); this.idleGirlTween = null; }
-    if (this.idleBodyTween) { this.idleBodyTween.stop(); this.idleBodyTween = null; }
-    if (this.idleFaceTween) { this.idleFaceTween.stop(); this.idleFaceTween = null; }
+    if (this.idleGirlTween) { try { this.idleGirlTween.stop(); } catch (e) {} this.idleGirlTween = null; }
+    if (this.idleBodyTween) { try { this.idleBodyTween.stop(); } catch (e) {} this.idleBodyTween = null; }
+    if (this.idleFaceTween) { try { this.idleFaceTween.stop(); } catch (e) {} this.idleFaceTween = null; }
 
     if (this.girl) { this.girl.x = this.girlHomeX; this.girl.y = this.girlHomeY; this.girl.setAngle(0); }
     if (this.body) this.body.y = this.bodyHomeY;
@@ -1096,13 +1096,13 @@ class GameScene extends Phaser.Scene {
 
     this.makeText(width/2, height/2 - 170, reason, 22, "#fff", "900").setOrigin(0.5);
 
-    const girlName = this.pack.girlName || "SEN";
-    const boyName  = this.pack.boyName  || "O";
+    const girlName = this.pack.girlName || "Ayşe";
+    const boyName  = this.pack.boyName  || "Mehmet";
 
     this.add.text(
       width/2,
       height/2 - 112,
-      `${girlName} vs ${boyName}\n\nSkor: ${this.score}\nEn iyi combo: ${this.bestCombo}\nToplam vuruş: ${this.totalHits}`,
+      `${girlName} ❤️ ${boyName}\n\nSkor: ${this.score}\nEn iyi combo: ${this.bestCombo}\nToplam vuruş: ${this.totalHits}`,
       { fontFamily: UI_FONT, fontSize: "15px", color: "#ddd", align: "center", fontStyle: "800" }
     ).setOrigin(0.5).setShadow(0, 3, "#000", 12);
 
