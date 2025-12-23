@@ -309,17 +309,28 @@ class GameScene extends Phaser.Scene {
 
     this.anger = 0;
     this.ended = false;
-
-    
-
     // Rage mode
     this.rageActive = false;
     this.rageSelecting = false;
+    this.rageQueued = false;       // FULL olunca bir kere aç
     this.rageWeaponKey = null;
-    this.rageOverlay = null;
-    this.ragePanel = null;
-    this.rageTimer = null;
+
+    // UI (seçim + aktif rage)
+    this.rageOverlay = null;       // kırmızı additive perde
+    this.rageDim = null;           // siyah karartma (okunabilirlik)
+    this.ragePanel = null;         // seçim modal container
+    this.ragePlate = null;         // üstte banner container
+    this.rageCountdownText = null; // süre / shot göstergesi
+
+    // timers
+    this.rageTimer = null;         // hard timeout
+    this.rageDrainEvent = null;    // barı (anger) süre gibi akıt
+    this.rageAutoEvent = null;     // terlik yağmuru gibi auto event
+    this.rageLockUntil = 0;        // modal açılınca spam click kilidi
+
+    // hadouken
     this.rageHadoukenShots = 0;
+    this.rageHadoukenCdUntil = 0;
 this.weapon = "slap";
     this.bottomBarH = 110;
 
@@ -469,7 +480,9 @@ this.weapon = "slap";
 
     // Tap = hit
     this.input.on("pointerdown", (p) => {
-      if (this.ended || this.isPaused) return;
+      if (this.ended) return;
+      if (this.rageSelecting) return; // modal açıkken spam click oyunu tetiklemesin
+      if (this.isPaused) return;
       if (p.y >= height - this.bottomBarH) return;
       this.hit();
     });
@@ -669,6 +682,7 @@ this.tweens.killTweensOf(this.face);
     return this.rageActive ? this.rageWeapons[k] : this.weapons[k];
   }
 
+
   enterRageSelection() {
     if (this.ended) return;
     if (this.rageActive || this.rageSelecting) return;
@@ -678,68 +692,312 @@ this.tweens.killTweensOf(this.face);
 
     const { width, height } = this.scale;
 
-    // kırmızı perde (arka plan "kızarsın baya")
+    // Spam click kazası olmasın: modal açılınca kısa kilit + basılı tut seçimi
+    this.rageLockUntil = this.time.now + 450;
+    const HOLD_MS = 420;
+
+    // karartma + kırmızı perde (okunabilirlik >>>)
+    if (this.rageDim) this.rageDim.destroy();
+    this.rageDim = this.add
+      .rectangle(width/2, height/2, width, height, 0x000000, 0.62)
+      .setDepth(9400)
+      .setInteractive(); // tıklamaları "yutar"
+
     if (!this.rageOverlay) {
-      this.rageOverlay = this.add.rectangle(width/2, height/2, width, height, 0xff0000, 0.0)
+      this.rageOverlay = this.add
+        .rectangle(width/2, height/2, width, height, 0xff0000, 0.0)
         .setDepth(9500)
         .setBlendMode(Phaser.BlendModes.ADD);
+    } else {
+      this.rageOverlay.setDepth(9500);
     }
+
+    this.tweens.killTweensOf(this.rageOverlay);
     this.tweens.add({
       targets: this.rageOverlay,
-      alpha: { from: 0.0, to: 0.38 },
+      alpha: { from: 0.0, to: 0.42 },
       duration: 220,
       ease: "Quad.easeOut"
     });
 
-    const panelW = Math.min(420, width - 40);
-    const panelH = 340;
+    // Panel
+    const panelW = Math.min(440, width - 34);
+    const panelH = 360;
 
+    if (this.ragePanel) { this.ragePanel.destroy(true); this.ragePanel = null; }
     this.ragePanel = this.add.container(0, 0).setDepth(9999);
 
     const bg = this.add.graphics();
-    bg.fillStyle(0x0b0b12, 0.90);
-    bg.fillRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 22);
-    bg.lineStyle(2, 0xffffff, 0.16);
-    bg.strokeRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 22);
+    bg.fillStyle(0x0b0b12, 0.94);
+    bg.fillRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 24);
+    bg.lineStyle(2, 0xffffff, 0.14);
+    bg.strokeRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 24);
 
-    const t = this.makeText(width/2, height/2 - 138, "RAGE MODE 🔥", 24, "#fff", "900").setOrigin(0.5);
-    const sub = this.makeText(width/2, height/2 - 110, "Silah seç: (7 sn)  •  büyük damage + efekt", 14, "rgba(255,255,255,0.85)", "700").setOrigin(0.5);
+    // Başlık – büyük, stroke'lu, okunur
+    const t = this.add.text(width/2, height/2 - panelH/2 + 44, "RAGE MODE", {
+      fontFamily: UI_FONT,
+      fontSize: "34px",
+      color: "#ffffff",
+      fontStyle: "900",
+      align: "center"
+    }).setOrigin(0.5).setShadow(0, 4, "#000", 16).setStroke("#000000", 8);
 
-    const mkChoice = (cy, key, title, desc) => {
-      const bw = panelW - 64, bh = 62;
-      const x = width/2 - bw/2, y = cy - bh/2;
+    const sub = this.add.text(width/2, height/2 - panelH/2 + 82, "Silahını seç: basılı tut (0.4 sn)", {
+      fontFamily: UI_FONT,
+      fontSize: "14px",
+      color: "rgba(255,255,255,0.86)",
+      fontStyle: "800",
+      align: "center"
+    }).setOrigin(0.5).setShadow(0, 2, "#000", 10);
 
-      const g = this.add.graphics();
-      g.fillStyle(0xffffff, 0.10);
-      g.fillRoundedRect(x, y, bw, bh, 16);
-      g.lineStyle(2, 0xffffff, 0.14);
-      g.strokeRoundedRect(x, y, bw, bh, 16);
+    // hold state (tek seçim)
+    if (!this.__rageHoldState) this.__rageHoldState = { key: null, tween: null, fill: null };
 
-      const ttl = this.makeText(width/2 - bw/2 + 18, cy - 16, title, 18, "#fff", "900").setOrigin(0, 0.5);
-      const ds  = this.makeText(width/2 - bw/2 + 18, cy + 10, desc, 13, "rgba(255,255,255,0.80)", "700").setOrigin(0, 0.5);
-
-      const zone = this.add.rectangle(width/2, cy, bw, bh, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
-      zone.on("pointerover", () => { g.clear(); g.fillStyle(0xffffff, 0.16); g.fillRoundedRect(x, y, bw, bh, 16); g.lineStyle(2, 0xffffff, 0.20); g.strokeRoundedRect(x, y, bw, bh, 16); });
-      zone.on("pointerout",  () => { g.clear(); g.fillStyle(0xffffff, 0.10); g.fillRoundedRect(x, y, bw, bh, 16); g.lineStyle(2, 0xffffff, 0.14); g.strokeRoundedRect(x, y, bw, bh, 16); });
-      zone.on("pointerdown", () => this.startRage(key));
-
-      this.ragePanel.add([g, ttl, ds, zone]);
+    const cancelHold = () => {
+      const hs = this.__rageHoldState;
+      if (hs?.tween) { hs.tween.stop(); hs.tween = null; }
+      if (hs?.fill) { hs.fill.scaleX = 0; hs.fill = null; }
+      if (hs) hs.key = null;
     };
 
-    mkChoice(height/2 - 35, "rage_slipper_rain", "🥿 Terlik Yağmuru", "Yağmur gibi terlik: çoklu isabet + komik kaos");
-    mkChoice(height/2 + 42, "rage_belt", "🪢 Kemer", "Tek vuruşta tok şak: güçlü geri itiş + ekstra sarsıntı");
-    mkChoice(height/2 + 119, "rage_hadouken", "🌀 Hadouken", "3 atışlık ulti: enerji topu + patlama efekti");
+    const mkChoice = (cy, key, title, desc) => {
+      const bw = panelW - 48;
+      const bh = 74;
+      const x0 = width/2 - bw/2;
+      const y0 = cy - bh/2;
 
-    const hint = this.makeText(width/2, height/2 + 155, "Seçmezsen oyun beklemez… sen seçene kadar durur 😈", 12, "rgba(255,255,255,0.65)", "700").setOrigin(0.5);
+      const g = this.add.graphics();
+      g.fillStyle(0xffffff, 0.06);
+      g.fillRoundedRect(x0, y0, bw, bh, 18);
+      g.lineStyle(2, 0xffffff, 0.12);
+      g.strokeRoundedRect(x0, y0, bw, bh, 18);
+
+      const ttl = this.add.text(x0 + 18, cy - 14, title, {
+        fontFamily: UI_FONT, fontSize: "18px", color: "#fff", fontStyle: "900"
+      }).setOrigin(0, 0.5).setShadow(0, 2, "#000", 12).setStroke("#000", 6);
+
+      const ds = this.add.text(x0 + 18, cy + 14, desc, {
+        fontFamily: UI_FONT, fontSize: "13px", color: "rgba(255,255,255,0.78)", fontStyle: "700"
+      }).setOrigin(0, 0.5).setShadow(0, 2, "#000", 10);
+
+      // Hold progress bar
+      const pbBg = this.add.rectangle(x0 + 16, y0 + bh - 12, bw - 32, 7, 0xffffff, 0.12).setOrigin(0, 0.5);
+      const pbFill = this.add.rectangle(x0 + 16, y0 + bh - 12, bw - 32, 7, 0xffffff, 0.92).setOrigin(0, 0.5);
+      pbFill.scaleX = 0;
+
+      const zone = this.add.rectangle(width/2, cy, bw, bh, 0xffffff, 0.001)
+        .setInteractive({ useHandCursor: true });
+
+      zone.on("pointerover", () => {
+        g.clear();
+        g.fillStyle(0xff0000, 0.12);
+        g.fillRoundedRect(x0, y0, bw, bh, 18);
+        g.lineStyle(2, 0xffffff, 0.22);
+        g.strokeRoundedRect(x0, y0, bw, bh, 18);
+      });
+
+      zone.on("pointerout", () => {
+        g.clear();
+        g.fillStyle(0xffffff, 0.06);
+        g.fillRoundedRect(x0, y0, bw, bh, 18);
+        g.lineStyle(2, 0xffffff, 0.12);
+        g.strokeRoundedRect(x0, y0, bw, bh, 18);
+        cancelHold();
+      });
+
+      zone.on("pointerup", () => cancelHold());
+
+      zone.on("pointerdown", () => {
+        if (this.time.now < this.rageLockUntil) return;
+
+        // yeni hold başlat
+        cancelHold();
+        this.__rageHoldState.key = key;
+        this.__rageHoldState.fill = pbFill;
+
+        pbFill.scaleX = 0;
+
+        this.__rageHoldState.tween = this.tweens.add({
+          targets: pbFill,
+          scaleX: 1,
+          duration: HOLD_MS,
+          ease: "Linear",
+          onComplete: () => {
+            if (!this.__rageHoldState) return;
+            if (this.__rageHoldState.key === key && this.rageSelecting) {
+              this.startRage(key);
+            }
+          }
+        });
+      });
+
+      this.ragePanel.add([g, ttl, ds, pbBg, pbFill, zone]);
+    };
+
+    mkChoice(height/2 - 40, "rage_slipper_rain", "🥿 Terlik Yağmuru", "Yağmur gibi terlik: komik kaos + seri isabet");
+    mkChoice(height/2 + 46, "rage_belt", "🪢 Kemer", "Tok şak modu: daha sert sarsıntı + daha yüksek skor");
+    mkChoice(height/2 + 132, "rage_hadouken", "🌀 Hadouken", "3 atışlık ulti: enerji topu + patlama efekti");
+
+    const hint = this.add.text(width/2, height/2 + panelH/2 - 26, "Yanlışlıkla seçilmez: basılı tutman şart 😈", {
+      fontFamily: UI_FONT,
+      fontSize: "12px",
+      color: "rgba(255,255,255,0.62)",
+      fontStyle: "800",
+      align: "center"
+    }).setOrigin(0.5).setShadow(0, 2, "#000", 10);
 
     this.ragePanel.add([bg, t, sub, hint]);
   }
 
+
+
+  spawnRageSlipper() {
+    if (!this.rageActive || this.rageWeaponKey !== "rage_slipper_rain") return;
+    if (this.ended || this.isPaused) return;
+
+    const { width } = this.scale;
+    const fromLeft = Phaser.Math.Between(0, 1) === 0;
+
+    const startX = fromLeft ? -30 : (width + 30);
+    const startY = this.face.y + Phaser.Math.Between(-140, 60);
+
+    const endX = this.face.x + Phaser.Math.Between(-14, 14);
+    const endY = this.face.y + Phaser.Math.Between(-8, 18);
+
+    const s = this.add.text(startX, startY, "🥿", { fontFamily: UI_FONT, fontSize: "46px" })
+      .setOrigin(0.5)
+      .setDepth(8200)
+      .setAlpha(0.95);
+
+    this.tweens.add({
+      targets: s,
+      x: endX,
+      y: endY,
+      angle: Phaser.Math.Between(-50, 50),
+      duration: 190,
+      ease: "Quad.easeIn",
+      onComplete: () => {
+        if (this.ended) { s.destroy(); return; }
+
+        // mini-impact
+        this.faceFlash();
+        this.spawnSparks();
+        this.cameraKick(fromLeft ? 1 : -1, 6);
+        this.impactRing();
+
+        const add = 2 * this.mult;
+        this.score += add;
+        this.scoreCountUp(this.score);
+        this.floatingScore(add);
+
+        // ses (slipper seti)
+        this.playWeaponSound();
+
+        s.destroy();
+      }
+    });
+  }
+
+  castHadouken() {
+    if (!this.rageActive || this.rageWeaponKey !== "rage_hadouken") return;
+    if (this.ended || this.isPaused) return;
+
+    const now = this.time.now;
+    if (now < this.rageHadoukenCdUntil) return;
+
+    if (this.rageHadoukenShots <= 0) {
+      this.endRage();
+      return;
+    }
+
+    this.rageHadoukenCdUntil = now + 260;
+    this.rageHadoukenShots--;
+
+    // combo say (ulti de hit sayılır)
+    this.totalHits++;
+    this.updateComboAndMultiplier();
+
+    const { width } = this.scale;
+
+    const sx = this.girl.x + 78;
+    const sy = this.girl.y - 120;
+
+    const ex = this.face.x;
+    const ey = this.face.y - 10;
+
+    const ball = this.add.text(sx, sy, "🌀", { fontFamily: UI_FONT, fontSize: "78px" })
+      .setOrigin(0.5)
+      .setDepth(9000)
+      .setAlpha(0.98)
+      .setShadow(0, 0, "#ffffff", 18);
+
+    // trail (hafif)
+    const trail = [];
+    const trailEvent = this.time.addEvent({
+      delay: 50,
+      loop: true,
+      callback: () => {
+        if (!ball || !ball.active) return;
+        const t = this.add.text(ball.x, ball.y, "✨", { fontFamily: UI_FONT, fontSize: "22px" })
+          .setOrigin(0.5)
+          .setDepth(8999)
+          .setAlpha(0.8);
+        trail.push(t);
+        this.tweens.add({
+          targets: t,
+          alpha: 0,
+          scale: 1.6,
+          duration: 220,
+          ease: "Quad.easeOut",
+          onComplete: () => t.destroy()
+        });
+      }
+    });
+
+    this.tweens.add({
+      targets: ball,
+      x: ex,
+      y: ey,
+      duration: 220,
+      ease: "Quad.easeIn",
+      onComplete: () => {
+        if (trailEvent) trailEvent.remove(false);
+
+        // MEGA IMPACT
+        this.hitStop(110);
+        this.hitScreenFlash();
+        this.spawnImpactFx();
+        this.spawnSparks();
+        this.faceFlash();
+        this.cameraKick(1, 18);
+        this.faceDisplace(1, 1.8);
+        this.impactRing();
+
+        const add = 18 * this.mult;
+        this.score += add;
+        this.scoreCountUp(this.score);
+        this.floatingScore(add);
+
+        ball.destroy();
+
+        // shotlar biterse rage kapat
+        if (this.rageHadoukenShots <= 0) {
+          this.time.delayedCall(180, () => this.endRage());
+        }
+      }
+    });
+  }
+
+
   startRage(key) {
     if (!this.rageSelecting) return;
 
-    // paneli kapat
+    // seçim panelini kapat
     if (this.ragePanel) { this.ragePanel.destroy(true); this.ragePanel = null; }
+    if (this.__rageHoldState) { 
+      if (this.__rageHoldState.tween) this.__rageHoldState.tween.stop();
+      this.__rageHoldState = null;
+    }
 
     this.rageSelecting = false;
     this.isPaused = false;
@@ -747,33 +1005,130 @@ this.tweens.killTweensOf(this.face);
     this.rageActive = true;
     this.rageWeaponKey = key;
 
-    // rage başlayınca bar sıfırlansın (tekrar doldurmak için)
-    this.anger = 0;
+    const { width, height } = this.scale;
+    const duration = (key === "rage_hadouken") ? 9000 : 7000;
+    this.rageEndsAt = this.time.now + duration;
+
+    // Rage sırasında bar = süre (FULL → boşalıyor)
+    this.anger = 100;
     this.drawBar();
 
-    // overlay daha "kırmızı"
+    // karartmayı biraz aç (oyun görünür ama yazılar okunur)
+    if (this.rageDim) {
+      this.rageDim.disableInteractive();
+      this.rageDim.setDepth(9400);
+      this.tweens.add({ targets: this.rageDim, alpha: 0.22, duration: 220, ease: "Quad.easeOut" });
+    }
+
+    // kırmızı perde pulse
     if (this.rageOverlay) {
+      this.rageOverlay.setDepth(9500);
       this.tweens.killTweensOf(this.rageOverlay);
-      this.rageOverlay.setAlpha(0.42);
       this.tweens.add({
         targets: this.rageOverlay,
-        alpha: { from: 0.42, to: 0.60 },
-        duration: 320,
+        alpha: { from: 0.28, to: 0.46 },
+        duration: 520,
         yoyo: true,
         repeat: -1,
         ease: "Sine.easeInOut"
       });
     }
 
-    // hadouken: 3 atış limiti
+    // üst banner
+    if (this.ragePlate) { this.ragePlate.destroy(true); this.ragePlate = null; }
+    this.ragePlate = this.add.container(0, 0).setDepth(10050);
+
+    const plateW = Math.min(360, width - 34);
+    const plateH = 56;
+
+    const plateBg = this.add.graphics();
+    plateBg.fillStyle(0x000000, 0.55);
+    plateBg.fillRoundedRect(width/2 - plateW/2, 16, plateW, plateH, 18);
+    plateBg.lineStyle(2, 0xffffff, 0.18);
+    plateBg.strokeRoundedRect(width/2 - plateW/2, 16, plateW, plateH, 18);
+
+    const title = this.add.text(width/2, 32, "RAGE MODE", {
+      fontFamily: UI_FONT,
+      fontSize: "18px",
+      color: "#fff",
+      fontStyle: "900"
+    }).setOrigin(0.5).setStroke("#000", 6).setShadow(0, 2, "#000", 12);
+
+    const w = this.rageWeapons[key];
+    const sub = this.add.text(width/2, 54, w ? w.label : "", {
+      fontFamily: UI_FONT,
+      fontSize: "13px",
+      color: "rgba(255,255,255,0.90)",
+      fontStyle: "800"
+    }).setOrigin(0.5).setShadow(0, 2, "#000", 10);
+
+    this.ragePlate.add([plateBg, title, sub]);
+
+    // sayaç
+    if (this.rageCountdownText) { this.rageCountdownText.destroy(); this.rageCountdownText = null; }
+    this.rageCountdownText = this.add.text(width - 14, 86, "", {
+      fontFamily: UI_FONT,
+      fontSize: "14px",
+      color: "#fff",
+      fontStyle: "900",
+      align: "right"
+    }).setOrigin(1, 0).setStroke("#000", 6).setShadow(0, 2, "#000", 12).setDepth(10060);
+
+    // hadouken: 3 shot
     this.rageHadoukenShots = (key === "rage_hadouken") ? 3 : 0;
+    this.rageHadoukenCdUntil = 0;
+
+    // terlik yağmuru: auto spawn
+    if (this.rageAutoEvent) { this.rageAutoEvent.remove(false); this.rageAutoEvent = null; }
+    if (key === "rage_slipper_rain") {
+      this.rageAutoEvent = this.time.addEvent({
+        delay: 140,
+        loop: true,
+        callback: () => {
+          if (!this.rageActive || this.ended || this.isPaused) return;
+          this.spawnRageSlipper();
+        }
+      });
+    }
+
+    // bar/sayaç güncelle
+    if (this.rageDrainEvent) { this.rageDrainEvent.remove(false); this.rageDrainEvent = null; }
+    this.rageDrainEvent = this.time.addEvent({
+      delay: 50,
+      loop: true,
+      callback: () => {
+        if (!this.rageActive) return;
+        const now = this.time.now;
+        const remain = Math.max(0, this.rageEndsAt - now);
+
+        // hadouken'da "shot" da göster
+        if (this.rageWeaponKey === "rage_hadouken") {
+          this.rageCountdownText.setText(`🌀 x${this.rageHadoukenShots}  |  ${(remain/1000).toFixed(1)}s`);
+        } else {
+          this.rageCountdownText.setText(`🔥 ${(remain/1000).toFixed(1)}s`);
+        }
+
+        // barı süre gibi akıt
+        this.anger = (remain / duration) * 100;
+        this.drawBar();
+
+        if (remain <= 0) this.endRage();
+      }
+    });
+
+    // hard timeout (fail-safe)
+    if (this.rageTimer) this.rageTimer.remove(false);
+    this.rageTimer = this.time.delayedCall(duration + 50, () => this.endRage());
 
     this.updateWeaponUI();
 
-    // süre
-    if (this.rageTimer) this.rageTimer.remove(false);
-    this.rageTimer = this.time.delayedCall(7000, () => this.endRage());
+    // mini "girdi" sinyali
+    this.hitScreenFlash();
+    this.cameraKick(0, 0);
   }
+
+
+
 
   endRage() {
     if (!this.rageActive) return;
@@ -781,8 +1136,14 @@ this.tweens.killTweensOf(this.face);
     this.rageActive = false;
     this.rageWeaponKey = null;
     this.rageHadoukenShots = 0;
+    this.rageHadoukenCdUntil = 0;
 
     if (this.rageTimer) { this.rageTimer.remove(false); this.rageTimer = null; }
+    if (this.rageDrainEvent) { this.rageDrainEvent.remove(false); this.rageDrainEvent = null; }
+    if (this.rageAutoEvent) { this.rageAutoEvent.remove(false); this.rageAutoEvent = null; }
+
+    if (this.rageCountdownText) { this.rageCountdownText.destroy(); this.rageCountdownText = null; }
+    if (this.ragePlate) { this.ragePlate.destroy(true); this.ragePlate = null; }
 
     // overlay kapat
     if (this.rageOverlay) {
@@ -792,12 +1153,30 @@ this.tweens.killTweensOf(this.face);
         alpha: 0.0,
         duration: 260,
         ease: "Quad.easeOut",
-        onComplete: () => { if (this.rageOverlay) { this.rageOverlay.destroy(); this.rageOverlay = null; } }
+        onComplete: () => {
+          if (this.rageOverlay) { this.rageOverlay.destroy(); this.rageOverlay = null; }
+        }
       });
     }
 
+    if (this.rageDim) {
+      this.tweens.add({
+        targets: this.rageDim,
+        alpha: 0.0,
+        duration: 240,
+        ease: "Quad.easeOut",
+        onComplete: () => { if (this.rageDim) { this.rageDim.destroy(); this.rageDim = null; } }
+      });
+    }
+
+    // bar boşalsın
+    this.anger = 0;
+    this.drawBar();
+
     this.updateWeaponUI();
   }
+
+
 
   spawnSlipperRain() {
     const { width } = this.scale;
@@ -1023,7 +1402,9 @@ if (this.weaponButtons) {
 const endX = this.face.x + Phaser.Math.Between(-10, 10);
     const endY = this.face.y + Phaser.Math.Between(-5, 12);
 
-    const fx = this.add.text(startX, endY - 10, w.fx, { fontSize: "54px", fontFamily: UI_FONT }).setOrigin(0.5);
+    const glyph = (this.rageActive && this.rageWeaponKey === "rage_belt") ? "🪢" : w.fx;
+
+    const fx = this.add.text(startX, endY - 10, glyph, { fontSize: "54px", fontFamily: UI_FONT }).setOrigin(0.5);
 
     this.tweens.add({
       targets: fx,
@@ -1222,9 +1603,16 @@ const endX = this.face.x + Phaser.Math.Between(-10, 10);
       }
     });
   }
-
   hit() {
-    if (this.ended || this.isPaused) return;
+    if (this.ended) return;
+    if (this.rageSelecting) return;
+    if (this.isPaused) return;
+
+    // Rage: Hadouken → tık = enerji topu
+    if (this.rageActive && this.rageWeaponKey === "rage_hadouken") {
+      this.castHadouken();
+      return;
+    }
     if (this.hitBusy) return;
     this.hitBusy = true;
 
@@ -1258,11 +1646,17 @@ const endX = this.face.x + Phaser.Math.Between(-10, 10);
     this.drawBar();
 
     
+    // öfke barı FULL → rage seçim ekranı (tek sefer)
+    if (this.anger >= 100 && !this.rageActive && !this.rageSelecting && !this.rageQueued) {
+      this.rageQueued = true;
+      // vurma animasyonu bitsin diye minicik gecikme
+      this.time.delayedCall(180, () => {
+        this.rageQueued = false;
+        this.enterRageSelection();
+      });
+    }
 
-    // öfke barı FULL → rage seçim ekranı
-    if (this.anger >= 100 && !this.rageActive && !this.rageSelecting) {
-      this.time.delayedCall(220, () => this.enterRageSelection());
-    }const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
+    const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
 
     // silaha göre daha tok hitStop
     const k = this.getActiveWeaponKey();
