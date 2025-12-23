@@ -1,6 +1,16 @@
+// ✅ Base-safe URL builder (Netlify subpath / SPA route / localhost hepsinde çalışsın)
+const BASE_URL = (() => {
+  const baseTag = document.querySelector("base");
+  if (baseTag && baseTag.href) return baseTag.href;
+  // bulunduğun klasörün path'ini baz al ("/demo/index.html" -> "/demo/")
+  return window.location.origin + window.location.pathname.replace(/[^/]*$/, "");
+})();
+
+const A = (p) => new URL(String(p).replace(/^\//, ""), BASE_URL).toString();
+
 const params = new URLSearchParams(window.location.search);
 const code = params.get("code") || "DEMO";
-const packUrl = `/packs/${code}.json`;
+const packUrl = A(`packs/${code}.json`);
 
 async function loadPack() {
   const res = await fetch(packUrl, { cache: "no-store" });
@@ -93,30 +103,35 @@ class PreloadScene extends Phaser.Scene {
       title.destroy(); hint.destroy(); percentText.destroy();
     });
 
-    // Common assets (heavy ones)
-    this.load.image("bg_intro", "/assets/bg_real.jpg");
-    this.load.audio("bgm", "/assets/music_intro.mp3");
+    // Debug: hangi dosya patlıyor gör (arka fon gelmiyor = çoğu zaman 404)
+    this.load.on("loaderror", (file) => {
+      console.warn("[LOAD ERROR]", file?.key, file?.src || file);
+    });
 
-    this.load.image("body_base", "/assets/body_base.png");
-    this.load.image("girl_base", "/assets/girl_base.png");
+    // Common assets (heavy ones) — ❌ baştaki "/" Netlify subpath'te çöp oluyor, ✅ A() ile düzeltildi
+    this.load.image("bg_intro", A("assets/bg_real.jpg"));
+    this.load.audio("bgm", A("assets/music_intro.mp3"));
 
-    this.load.audio("switch", "/sounds/switch.mp3");
+    this.load.image("body_base", A("assets/body_base.png"));
+    this.load.image("girl_base", A("assets/girl_base.png"));
 
-    this.load.audio("slap1", "/sounds/slap1.mp3");
-    this.load.audio("slap2", "/sounds/slap2.mp3");
-    this.load.audio("slap3", "/sounds/slap3.mp3");
+    this.load.audio("switch", A("sounds/switch.mp3"));
 
-    this.load.audio("slipper1", "/sounds/slipper1.mp3");
-    this.load.audio("slipper2", "/sounds/slipper2.mp3");
-    this.load.audio("slipper3", "/sounds/slipper3.mp3");
+    this.load.audio("slap1", A("sounds/slap1.mp3"));
+    this.load.audio("slap2", A("sounds/slap2.mp3"));
+    this.load.audio("slap3", A("sounds/slap3.mp3"));
 
-    this.load.audio("pillow1", "/sounds/pillow1.mp3");
-    this.load.audio("pillow2", "/sounds/pillow2.mp3");
-    this.load.audio("pillow3", "/sounds/pillow3.mp3");
+    this.load.audio("slipper1", A("sounds/slipper1.mp3"));
+    this.load.audio("slipper2", A("sounds/slipper2.mp3"));
+    this.load.audio("slipper3", A("sounds/slipper3.mp3"));
 
-    this.load.audio("pan1", "/sounds/pan1.mp3");
-    this.load.audio("pan2", "/sounds/pan2.mp3");
-    this.load.audio("pan3", "/sounds/pan3.mp3");
+    this.load.audio("pillow1", A("sounds/pillow1.mp3"));
+    this.load.audio("pillow2", A("sounds/pillow2.mp3"));
+    this.load.audio("pillow3", A("sounds/pillow3.mp3"));
+
+    this.load.audio("pan1", A("sounds/pan1.mp3"));
+    this.load.audio("pan2", A("sounds/pan2.mp3"));
+    this.load.audio("pan3", A("sounds/pan3.mp3"));
   }
 
   create(){
