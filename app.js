@@ -224,8 +224,8 @@ class SplashScene extends Phaser.Scene {
     drawBox(leftX);
     drawBox(rightX);
 
-    const girlName = this.pack.girlName || "Ayşe";
-    const boyName  = this.pack.boyName  || "Mehmet";
+    const girlName = this.pack.girlName || "SEN";
+    const boyName  = this.pack.boyName  || "O";
 
     this.add.text(leftX, frameY - frameH / 2 + 10, girlName, {
       fontFamily: UI_FONT, fontSize: "12px", color: "#ffd1f3", fontStyle: "900"
@@ -310,7 +310,17 @@ class GameScene extends Phaser.Scene {
     this.anger = 0;
     this.ended = false;
 
-    this.weapon = "slap";
+    
+
+    // Rage mode
+    this.rageActive = false;
+    this.rageSelecting = false;
+    this.rageWeaponKey = null;
+    this.rageOverlay = null;
+    this.ragePanel = null;
+    this.rageTimer = null;
+    this.rageHadoukenShots = 0;
+this.weapon = "slap";
     this.bottomBarH = 110;
 
     this.hitBusy = false;
@@ -348,9 +358,9 @@ class GameScene extends Phaser.Scene {
     this.scoreText = this.makeText(24, 16, "Skor: 0", 18, "#fff", "900").setOrigin(0,0);
     this.comboText = this.makeText(24, 42, "Combo: 0  x1", 13, "#ffcc00", "800").setOrigin(0,0);
 
-    const girlName = this.pack.girlName || "Ayşe";
-    const boyName  = this.pack.boyName  || "Mehmet";
-    this.nameText = this.makeText(24, 64, `${girlName} ❤️ ${boyName}`, 12, "#d9d9ff", "700").setOrigin(0,0);
+    const girlName = this.pack.girlName || "SEN";
+    const boyName  = this.pack.boyName  || "O";
+    this.nameText = this.makeText(24, 64, `${girlName} vs ${boyName}`, 12, "#d9d9ff", "700").setOrigin(0,0);
 
     this.timeText = this.makeText(width - 22, 16, `${this.timeLeft}s`, 18, "#fff", "900").setOrigin(1,0);
     this.weaponLabel = this.makeText(width - 22, 42, "", 13, "#b7e3ff", "800").setOrigin(1,0);
@@ -409,6 +419,13 @@ class GameScene extends Phaser.Scene {
       slipper: { label: "🥿 Terlik", base: 2, anger: 2, sounds: ["slipper1","slipper2","slipper3"], fx: "🥿" },
       pillow:  { label: "☁️ Yastık", base: 3, anger: 1, sounds: ["pillow1","pillow2","pillow3"], fx: "☁️" },
       pan:     { label: "🍳 Tava",   base: 5, anger: 4, sounds: ["pan1","pan2","pan3"], fx: "🍳" }
+    };
+
+    // Rage-only weapons (bar dolunca seçilecek)
+    this.rageWeapons = {
+      rage_slipper_rain: { label: "🥿 Terlik Yağmuru", base: 6, anger: 0, sounds: ["slipper1","slipper2","slipper3"], fx: "🥿" },
+      rage_belt:         { label: "🪢 Kemer",         base: 8, anger: 0, sounds: ["slap1","slap2","slap3"], fx: "🪢" },
+      rage_hadouken:     { label: "🌀 Hadouken",      base:10, anger: 0, sounds: ["pan1","pan2","pan3"], fx: "🌀" }
     };
 
     this.updateWeaponUI();
@@ -522,12 +539,12 @@ class GameScene extends Phaser.Scene {
     }
   }
 
-  cameraKick(dir) {
+  cameraKick(dir, mag = 10) {
     const cam = this.cameras.main;
     cam.scrollX = 0;
     this.tweens.add({
       targets: cam,
-      scrollX: dir * 10,
+      scrollX: dir * mag,
       duration: 55,
       yoyo: true,
       ease: "Quad.easeOut",
@@ -535,19 +552,24 @@ class GameScene extends Phaser.Scene {
     });
   }
 
-  faceDisplace(dir) {
+  faceDisplace(dir, mult = 1) {
     // vurulan yön hissi: yüz hafif kayıp geri gelsin
+    const k = this.getActiveWeaponKey();
     const kick =
-      (this.weapon === "pan") ? 10 :
-      (this.weapon === "slipper") ? 8 :
-      (this.weapon === "slap") ? 6 : 4;
+      (k === "pan") ? 10 :
+      (k === "slipper") ? 8 :
+      (k === "slap") ? 6 :
+      (k === "rage_belt") ? 11 :
+      (k === "rage_hadouken") ? 12 :
+      4;
 
-    this.tweens.killTweensOf(this.face);
+    const finalKick = kick * mult;
+this.tweens.killTweensOf(this.face);
     this.face.x = this.faceHomeX;
 
     this.tweens.add({
       targets: this.face,
-      x: this.faceHomeX + dir * kick,
+      x: this.faceHomeX + dir * finalKick,
       duration: 45,
       yoyo: true,
       ease: "Quad.easeOut",
@@ -637,11 +659,246 @@ class GameScene extends Phaser.Scene {
     this.barFill.fillRoundedRect(this.barX - 8, this.barBottomY - h, 16, h, 8);
   }
 
-  updateWeaponUI() {
-    const w = this.weapons[this.weapon];
-    this.weaponLabel.setText(`Silah: ${w.label}`);
 
-    if (this.weaponButtons) {
+  getActiveWeaponKey() {
+    return this.rageActive ? this.rageWeaponKey : this.weapon;
+  }
+
+  getActiveWeapon() {
+    const k = this.getActiveWeaponKey();
+    return this.rageActive ? this.rageWeapons[k] : this.weapons[k];
+  }
+
+  enterRageSelection() {
+    if (this.ended) return;
+    if (this.rageActive || this.rageSelecting) return;
+
+    this.rageSelecting = true;
+    this.isPaused = true;
+
+    const { width, height } = this.scale;
+
+    // kırmızı perde (arka plan "kızarsın baya")
+    if (!this.rageOverlay) {
+      this.rageOverlay = this.add.rectangle(width/2, height/2, width, height, 0xff0000, 0.0)
+        .setDepth(9500)
+        .setBlendMode(Phaser.BlendModes.ADD);
+    }
+    this.tweens.add({
+      targets: this.rageOverlay,
+      alpha: { from: 0.0, to: 0.38 },
+      duration: 220,
+      ease: "Quad.easeOut"
+    });
+
+    const panelW = Math.min(420, width - 40);
+    const panelH = 340;
+
+    this.ragePanel = this.add.container(0, 0).setDepth(9999);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x0b0b12, 0.90);
+    bg.fillRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 22);
+    bg.lineStyle(2, 0xffffff, 0.16);
+    bg.strokeRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 22);
+
+    const t = this.makeText(width/2, height/2 - 138, "RAGE MODE 🔥", 24, "#fff", "900").setOrigin(0.5);
+    const sub = this.makeText(width/2, height/2 - 110, "Silah seç: (7 sn)  •  büyük damage + efekt", 14, "rgba(255,255,255,0.85)", "700").setOrigin(0.5);
+
+    const mkChoice = (cy, key, title, desc) => {
+      const bw = panelW - 64, bh = 62;
+      const x = width/2 - bw/2, y = cy - bh/2;
+
+      const g = this.add.graphics();
+      g.fillStyle(0xffffff, 0.10);
+      g.fillRoundedRect(x, y, bw, bh, 16);
+      g.lineStyle(2, 0xffffff, 0.14);
+      g.strokeRoundedRect(x, y, bw, bh, 16);
+
+      const ttl = this.makeText(width/2 - bw/2 + 18, cy - 16, title, 18, "#fff", "900").setOrigin(0, 0.5);
+      const ds  = this.makeText(width/2 - bw/2 + 18, cy + 10, desc, 13, "rgba(255,255,255,0.80)", "700").setOrigin(0, 0.5);
+
+      const zone = this.add.rectangle(width/2, cy, bw, bh, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+      zone.on("pointerover", () => { g.clear(); g.fillStyle(0xffffff, 0.16); g.fillRoundedRect(x, y, bw, bh, 16); g.lineStyle(2, 0xffffff, 0.20); g.strokeRoundedRect(x, y, bw, bh, 16); });
+      zone.on("pointerout",  () => { g.clear(); g.fillStyle(0xffffff, 0.10); g.fillRoundedRect(x, y, bw, bh, 16); g.lineStyle(2, 0xffffff, 0.14); g.strokeRoundedRect(x, y, bw, bh, 16); });
+      zone.on("pointerdown", () => this.startRage(key));
+
+      this.ragePanel.add([g, ttl, ds, zone]);
+    };
+
+    mkChoice(height/2 - 35, "rage_slipper_rain", "🥿 Terlik Yağmuru", "Yağmur gibi terlik: çoklu isabet + komik kaos");
+    mkChoice(height/2 + 42, "rage_belt", "🪢 Kemer", "Tek vuruşta tok şak: güçlü geri itiş + ekstra sarsıntı");
+    mkChoice(height/2 + 119, "rage_hadouken", "🌀 Hadouken", "3 atışlık ulti: enerji topu + patlama efekti");
+
+    const hint = this.makeText(width/2, height/2 + 155, "Seçmezsen oyun beklemez… sen seçene kadar durur 😈", 12, "rgba(255,255,255,0.65)", "700").setOrigin(0.5);
+
+    this.ragePanel.add([bg, t, sub, hint]);
+  }
+
+  startRage(key) {
+    if (!this.rageSelecting) return;
+
+    // paneli kapat
+    if (this.ragePanel) { this.ragePanel.destroy(true); this.ragePanel = null; }
+
+    this.rageSelecting = false;
+    this.isPaused = false;
+
+    this.rageActive = true;
+    this.rageWeaponKey = key;
+
+    // rage başlayınca bar sıfırlansın (tekrar doldurmak için)
+    this.anger = 0;
+    this.drawBar();
+
+    // overlay daha "kırmızı"
+    if (this.rageOverlay) {
+      this.tweens.killTweensOf(this.rageOverlay);
+      this.rageOverlay.setAlpha(0.42);
+      this.tweens.add({
+        targets: this.rageOverlay,
+        alpha: { from: 0.42, to: 0.60 },
+        duration: 320,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut"
+      });
+    }
+
+    // hadouken: 3 atış limiti
+    this.rageHadoukenShots = (key === "rage_hadouken") ? 3 : 0;
+
+    this.updateWeaponUI();
+
+    // süre
+    if (this.rageTimer) this.rageTimer.remove(false);
+    this.rageTimer = this.time.delayedCall(7000, () => this.endRage());
+  }
+
+  endRage() {
+    if (!this.rageActive) return;
+
+    this.rageActive = false;
+    this.rageWeaponKey = null;
+    this.rageHadoukenShots = 0;
+
+    if (this.rageTimer) { this.rageTimer.remove(false); this.rageTimer = null; }
+
+    // overlay kapat
+    if (this.rageOverlay) {
+      this.tweens.killTweensOf(this.rageOverlay);
+      this.tweens.add({
+        targets: this.rageOverlay,
+        alpha: 0.0,
+        duration: 260,
+        ease: "Quad.easeOut",
+        onComplete: () => { if (this.rageOverlay) { this.rageOverlay.destroy(); this.rageOverlay = null; } }
+      });
+    }
+
+    this.updateWeaponUI();
+  }
+
+  spawnSlipperRain() {
+    const { width } = this.scale;
+    const endX = this.face.x + Phaser.Math.Between(-12, 12);
+    const endY = this.face.y + Phaser.Math.Between(-6, 10);
+
+    const count = 7;
+    for (let i = 0; i < count; i++) {
+      this.time.delayedCall(i * 45, () => {
+        const startX = (Math.random() < 0.5) ? -30 : (width + 30);
+        const y = endY + Phaser.Math.Between(-35, 35);
+        const fx = this.add.text(startX, y, "🥿", { fontSize: "48px", fontFamily: UI_FONT }).setOrigin(0.5);
+
+        this.tweens.add({
+          targets: fx,
+          x: endX + Phaser.Math.Between(-18, 18),
+          y: y + Phaser.Math.Between(-10, 10),
+          angle: Phaser.Math.Between(-70, 70),
+          duration: 170,
+          ease: "Quad.easeOut",
+          onComplete: () => fx.destroy()
+        });
+      });
+    }
+  }
+
+  spawnBeltWhip(dir) {
+    const { width } = this.scale;
+    const startX = (Math.random() < 0.5) ? -40 : (width + 40);
+    const y = this.face.y + Phaser.Math.Between(-18, 18);
+
+    const whip = this.add.text(startX, y, "🪢", { fontSize: "56px", fontFamily: UI_FONT }).setOrigin(0.5);
+    whip.setScale(1.15);
+
+    this.tweens.add({
+      targets: whip,
+      x: this.face.x + dir * 8,
+      duration: 120,
+      ease: "Cubic.easeOut",
+      onComplete: () => whip.destroy()
+    });
+  }
+
+  spawnHadouken() {
+    const { width } = this.scale;
+
+    const fromLeft = (Math.random() < 0.5);
+    const startX = fromLeft ? -50 : (width + 50);
+    const y = this.face.y + Phaser.Math.Between(-18, 18);
+
+    const ball = this.add.text(startX, y, "🌀", { fontSize: "62px", fontFamily: UI_FONT }).setOrigin(0.5);
+    ball.setScale(1.05);
+
+    // trail
+    const trail = [];
+    for (let i = 0; i < 4; i++) {
+      const t = this.add.text(startX, y, "✨", { fontSize: "28px", fontFamily: UI_FONT }).setOrigin(0.5);
+      t.setAlpha(0.0);
+      trail.push(t);
+    }
+
+    this.tweens.add({
+      targets: ball,
+      x: this.face.x,
+      duration: 240,
+      ease: "Quad.easeOut",
+      onUpdate: () => {
+        for (let i = 0; i < trail.length; i++) {
+          const t = trail[i];
+          const lag = (i + 1) * 0.08;
+          t.x += (ball.x - t.x) * lag;
+          t.y += (ball.y - t.y) * lag;
+          t.setAlpha(0.25);
+        }
+      },
+      onComplete: () => {
+        ball.destroy();
+        trail.forEach(t => t.destroy());
+
+        // patlama
+        const boom = this.add.text(this.face.x, this.face.y, "💥", { fontSize: "64px", fontFamily: UI_FONT }).setOrigin(0.5);
+        this.tweens.add({
+          targets: boom,
+          scale: { from: 0.8, to: 1.35 },
+          alpha: { from: 1, to: 0 },
+          duration: 180,
+          ease: "Quad.easeOut",
+          onComplete: () => boom.destroy()
+        });
+
+        this.hitScreenFlash();
+        this.impactRing();
+      }
+    });
+  }
+
+  updateWeaponUI() {
+    const w = this.getActiveWeapon();
+    const prefix = this.rageActive ? "RAGE" : "Silah";
+    this.weaponLabel.setText(`${prefix}: ${w.label}`);
+if (this.weaponButtons) {
       for (const k of Object.keys(this.weaponButtons)) {
         const sel = (k === this.weapon);
         this.weaponButtons[k].bg.setAlpha(sel ? 0.92 : 0.22);
@@ -735,9 +992,9 @@ class GameScene extends Phaser.Scene {
   }
 
   stopIdleBobbing() {
-    if (this.idleGirlTween) { try { this.idleGirlTween.stop(); } catch (e) {} this.idleGirlTween = null; }
-    if (this.idleBodyTween) { try { this.idleBodyTween.stop(); } catch (e) {} this.idleBodyTween = null; }
-    if (this.idleFaceTween) { try { this.idleFaceTween.stop(); } catch (e) {} this.idleFaceTween = null; }
+    if (this.idleGirlTween) { this.idleGirlTween.stop(); this.idleGirlTween = null; }
+    if (this.idleBodyTween) { this.idleBodyTween.stop(); this.idleBodyTween = null; }
+    if (this.idleFaceTween) { this.idleFaceTween.stop(); this.idleFaceTween = null; }
 
     if (this.girl) { this.girl.x = this.girlHomeX; this.girl.y = this.girlHomeY; this.girl.setAngle(0); }
     if (this.body) this.body.y = this.bodyHomeY;
@@ -751,18 +1008,19 @@ class GameScene extends Phaser.Scene {
   }
 
   playWeaponSound() {
-    const w = this.weapons[this.weapon];
+    const w = this.getActiveWeapon();
     const key = Phaser.Utils.Array.GetRandom(w.sounds);
     const rate = Phaser.Math.FloatBetween(0.95, 1.05);
     this.sound.play(key, { volume: 0.9, rate });
   }
 
   spawnWeaponFx() {
-    const w = this.weapons[this.weapon];
+    const w = this.getActiveWeapon();
     const { width } = this.scale;
 
-    const startX = (this.girlHomeX < this.face.x) ? -20 : (width + 20);
-    const endX = this.face.x + Phaser.Math.Between(-10, 10);
+    // sağlı-sollu gelsin (random)
+    const startX = (Math.random() < 0.5) ? -20 : (width + 20);
+const endX = this.face.x + Phaser.Math.Between(-10, 10);
     const endY = this.face.y + Phaser.Math.Between(-5, 12);
 
     const fx = this.add.text(startX, endY - 10, w.fx, { fontSize: "54px", fontFamily: UI_FONT }).setOrigin(0.5);
@@ -809,8 +1067,9 @@ class GameScene extends Phaser.Scene {
     this.girl.y = this.girlHomeY;
 
     const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
-    const push = (this.weapon === "pan") ? 18 : (this.weapon === "slipper" ? 14 : (this.weapon === "slap" ? 12 : 8));
-    const tilt = (this.weapon === "pan") ? 10 : (this.weapon === "slipper" ? 8 : 6);
+    const k = this.getActiveWeaponKey();
+    const push = (k === "pan") ? 18 : (k === "slipper" ? 14 : (k === "slap" ? 12 : (k === "rage_belt" ? 20 : (k === "rage_hadouken" ? 18 : 8))));
+    const tilt = (k === "pan") ? 10 : (k === "slipper" ? 8 : (k === "rage_belt" ? 12 : (k === "rage_hadouken" ? 10 : 6)));
 
     this.tweens.add({
       targets: this.girl,
@@ -828,13 +1087,20 @@ class GameScene extends Phaser.Scene {
   }
 
   targetReaction() {
-    if (this.weapon === "pan") this.cameras.main.shake(210, 0.020);
-    else if (this.weapon === "slipper") this.cameras.main.shake(130, 0.013);
-    else if (this.weapon === "slap") this.cameras.main.shake(95, 0.010);
+    const k = this.getActiveWeaponKey();
+
+    if (k === "pan" || k === "rage_hadouken") this.cameras.main.shake(230, 0.024);
+    else if (k === "rage_belt") this.cameras.main.shake(200, 0.020);
+    else if (k === "slipper" || k === "rage_slipper_rain") this.cameras.main.shake(140, 0.014);
+    else if (k === "slap") this.cameras.main.shake(95, 0.010);
     else this.cameras.main.shake(55, 0.006);
 
-    const amp = (this.weapon === "pan") ? 18 : (this.weapon === "slipper" ? 14 : 10);
-    const dur = (this.weapon === "pillow") ? 70 : 55;
+    const amp =
+      (k === "pan" || k === "rage_hadouken") ? 20 :
+      (k === "rage_belt") ? 18 :
+      (k === "slipper" || k === "rage_slipper_rain") ? 14 : 10;
+
+    const dur = (k === "pillow") ? 70 : 55;
 
     this.tweens.add({
       targets: this.face,
@@ -845,7 +1111,7 @@ class GameScene extends Phaser.Scene {
       onComplete: () => this.face.setAngle(0)
     });
 
-    const bodyKick = (this.weapon === "pan") ? 6 : (this.weapon === "pillow") ? 2 : 3;
+    const bodyKick = (k === "pan" || k === "rage_hadouken") ? 7 : (k === "pillow") ? 2 : (k === "rage_belt" ? 6 : 3);
     this.tweens.add({
       targets: this.body,
       y: this.bodyHomeY + bodyKick,
@@ -971,8 +1237,19 @@ class GameScene extends Phaser.Scene {
     this.totalHits++;
     this.updateComboAndMultiplier();
 
-    const w = this.weapons[this.weapon];
-    const add = w.base * this.mult;
+    const w = this.getActiveWeapon();
+    let add = w.base * this.mult;
+
+    // Rage bonus + özel efektler (seçilen silaha göre)
+    if (this.rageActive) {
+      if (this.rageWeaponKey === "rage_slipper_rain") {
+        add += 3 * this.mult; // bonus damage
+      } else if (this.rageWeaponKey === "rage_belt") {
+        add += 5 * this.mult;
+      } else if (this.rageWeaponKey === "rage_hadouken") {
+        add += 7 * this.mult;
+      }
+    }
 
     this.score += add;
     this.scoreCountUp(this.score);
@@ -980,10 +1257,20 @@ class GameScene extends Phaser.Scene {
     this.anger = Math.min(100, this.anger + w.anger);
     this.drawBar();
 
-    const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
+    
+
+    // öfke barı FULL → rage seçim ekranı
+    if (this.anger >= 100 && !this.rageActive && !this.rageSelecting) {
+      this.time.delayedCall(220, () => this.enterRageSelection());
+    }const dir = (this.girlHomeX < this.face.x) ? 1 : -1;
 
     // silaha göre daha tok hitStop
-    const hs = (this.weapon === "pan") ? 90 : (this.weapon === "slipper") ? 75 : (this.weapon === "slap") ? 62 : 55;
+    const k = this.getActiveWeaponKey();
+    const hs =
+      (k === "pan" || k === "rage_hadouken") ? 105 :
+      (k === "rage_belt") ? 95 :
+      (k === "slipper" || k === "rage_slipper_rain") ? 80 :
+      (k === "slap") ? 62 : 55;
     this.hitStop(hs);
 
     this.impactRing();
@@ -993,11 +1280,28 @@ class GameScene extends Phaser.Scene {
       this.faceFlash();
       this.spawnBruise();
       this.spawnSparks();
-      this.cameraKick(dir);
-      this.faceDisplace(dir);
+      const rk = this.rageActive ? (this.rageWeaponKey === "rage_belt" ? 2.0 : (this.rageWeaponKey === "rage_hadouken" ? 2.6 : 1.4)) : 1.0;
+      this.cameraKick(dir, 10 * rk);
+      this.faceDisplace(dir, rk);
 
       // mevcut efektler
-      this.spawnWeaponFx();
+      if (this.rageActive) {
+        if (this.rageWeaponKey === "rage_slipper_rain") {
+          this.spawnSlipperRain();
+        } else if (this.rageWeaponKey === "rage_belt") {
+          this.spawnBeltWhip(dir);
+        } else if (this.rageWeaponKey === "rage_hadouken") {
+          if (this.rageHadoukenShots > 0) {
+            this.spawnHadouken();
+            this.rageHadoukenShots--;
+            if (this.rageHadoukenShots <= 0) this.endRage();
+          } else {
+            this.endRage();
+          }
+        }
+      } else {
+        this.spawnWeaponFx();
+      }
       this.spawnImpactFx();
       this.hitScreenFlash();
       this.girlRecoil();
@@ -1096,13 +1400,13 @@ class GameScene extends Phaser.Scene {
 
     this.makeText(width/2, height/2 - 170, reason, 22, "#fff", "900").setOrigin(0.5);
 
-    const girlName = this.pack.girlName || "Ayşe";
-    const boyName  = this.pack.boyName  || "Mehmet";
+    const girlName = this.pack.girlName || "SEN";
+    const boyName  = this.pack.boyName  || "O";
 
     this.add.text(
       width/2,
       height/2 - 112,
-      `${girlName} ❤️ ${boyName}\n\nSkor: ${this.score}\nEn iyi combo: ${this.bestCombo}\nToplam vuruş: ${this.totalHits}`,
+      `${girlName} vs ${boyName}\n\nSkor: ${this.score}\nEn iyi combo: ${this.bestCombo}\nToplam vuruş: ${this.totalHits}`,
       { fontFamily: UI_FONT, fontSize: "15px", color: "#ddd", align: "center", fontStyle: "800" }
     ).setOrigin(0.5).setShadow(0, 3, "#000", 12);
 
