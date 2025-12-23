@@ -9,12 +9,21 @@ const BASE_URL = (() => {
 const A = (p) => new URL(String(p).replace(/^\//, ""), BASE_URL).toString();
 
 const params = new URLSearchParams(window.location.search);
-const code = params.get("code") || "DEMO";
-const packUrl = A(`packs/${code}.json`);
 
+// "DEMO" lafı göz yoruyor: default'ı Ayşe-Mehmet yaptım, pack yoksa otomatik DEMO'ya düşer.
+const codeParam = params.get("code");
+const code = codeParam || "AYSE_MEHMET";
+const packUrl = A(`packs/${code}.json`);
 async function loadPack() {
-  const res = await fetch(packUrl, { cache: "no-store" });
-  if (!res.ok) throw new Error("Pack bulunamadı: " + packUrl);
+  let res = await fetch(packUrl, { cache: "no-store" });
+
+  // Custom pack yoksa DEMO'ya düş (oyun patlamasın).
+  if (!res.ok) {
+    const fallbackUrl = A(`packs/DEMO.json`);
+    res = await fetch(fallbackUrl, { cache: "no-store" });
+  }
+
+  if (!res.ok) throw new Error("Pack bulunamadı: " + (res.url || packUrl));
   return await res.json();
 }
 
@@ -109,7 +118,7 @@ class PreloadScene extends Phaser.Scene {
     });
 
     // Common assets (heavy ones) — ❌ baştaki "/" Netlify subpath'te çöp oluyor, ✅ A() ile düzeltildi
-    this.load.image("bg_intro", A("assets/bg_room.jpg"));
+    this.load.image("bg_intro", A("assets/bg_real.jpg"));
     this.load.audio("bgm", A("assets/music_intro.mp3"));
 
     this.load.image("body_base", A("assets/body_base.png"));
@@ -191,18 +200,13 @@ class SplashScene extends Phaser.Scene {
     card.lineStyle(2, 0xffffff, 0.14);
     card.strokeRoundedRect(cardX - cardW / 2, cardY - cardH / 2, cardW, cardH, 22);
 
-    const title = this.pack.title || "Couple Bonk";
+    const rawTitle = (this.pack.title || "").trim();
+    const title = (!rawTitle || /demo/i.test(rawTitle)) ? "Ayşe Mehmet" : rawTitle;
     this.add.text(width / 2, cardY - 270, title, {
       fontFamily: UI_FONT, fontSize: "28px", color: "#fff", fontStyle: "800"
     }).setOrigin(0.5).setShadow(0, 3, "#000", 12);
 
-    const tagline = this.pack.tagline || "Basit oynanış • aşırı iyi his • gösterince güldürür";
-    this.add.text(width / 2, cardY - 235, tagline, {
-      fontFamily: UI_FONT, fontSize: "12px", color: "#d9d9ff", align: "center",
-      wordWrap: { width: cardW - 40 }
-    }).setOrigin(0.5);
-
-    // Couple Preview
+// Couple Preview
     const frameY = cardY - 75;
     const frameW = Math.min(150, (width - 84) / 2);
     const frameH = 210;
@@ -283,11 +287,7 @@ class SplashScene extends Phaser.Scene {
       this.tweens.add({ targets: all, scale: 1.03, duration: 120, yoyo: true, ease: "Quad.easeOut" });
       this.time.delayedCall(120, () => this.scene.start("Game", { pack: this.pack }));
     });
-
-    this.add.text(width / 2, cardY + 260, "Kişiye özel: kafa foto + isimler + sesler", {
-      fontFamily: UI_FONT, fontSize: "12px", color: "#ddd"
-    }).setOrigin(0.5);
-  }
+}
 }
 
 /* ---------------- GAME ---------------- */
