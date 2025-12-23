@@ -118,7 +118,7 @@ class PreloadScene extends Phaser.Scene {
     });
 
     // Common assets (heavy ones) — ❌ baştaki "/" Netlify subpath'te çöp oluyor, ✅ A() ile düzeltildi
-    this.load.image("bg_intro", A("assets/bg_real.jpg"));
+    this.load.image("bg_intro", A("assets/bg_room.jpg"));
     this.load.audio("bgm", A("assets/music_intro.mp3"));
 
     this.load.image("body_base", A("assets/body_base.png"));
