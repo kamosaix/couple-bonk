@@ -696,80 +696,160 @@ this.tweens.killTweensOf(this.face);
 
   
 enterRageSelection() {
-  // Artık seçim yok: Rage dolunca direkt Terlik Yağmuru'na giriyoruz.
   if (this.ended) return;
   if (this.rageActive || this.rageSelecting) return;
 
   this.rageSelecting = true;
-  this.isPaused = true; // sadece input'u kilitlemek için (tween'leri durdurmuyoruz)
+  this.isPaused = true; // sadece oyun input'unu kilitle (anim/tween akabilir)
 
-  // “Foto büyüyor” drift'ini sıfırla
+  // “Foto zoom” drift'ini sıfırla
   this.resetFaceTransform?.();
 
   const { width, height } = this.scale;
+  const nowOpen = this.time.now;
+  this.rageSelectionOpenedAt = nowOpen;
 
-  // Arka plan görünsün ama yazılar net olsun
+  // Arka plan GÖZÜKSÜN: hafif karart + input'u yut
   if (this.rageDim) this.rageDim.destroy();
   this.rageDim = this.add
-    .rectangle(width / 2, height / 2, width, height, 0x000000, 0.38)
+    .rectangle(width / 2, height / 2, width, height, 0x000000, 0.20)
     .setDepth(9400)
     .setInteractive(); // spam click'i yut
 
-  // Panel
   const panelW = Math.min(420, width - 34);
-  const panelH = 260;
+  const panelH = 320;
 
   if (this.ragePanel) { this.ragePanel.destroy(true); this.ragePanel = null; }
   this.ragePanel = this.add.container(0, 0).setDepth(9999);
 
+  // Panel BG (opak değil: arka plan görünür, ama yazı OKUNUR)
   const bg = this.add.graphics();
-  bg.fillStyle(0x0b0b12, 0.92);
-  bg.fillRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 24);
+  bg.fillStyle(0x0b0b12, 0.84);
+  bg.fillRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 26);
   bg.lineStyle(2, 0xffffff, 0.16);
-  bg.strokeRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 24);
+  bg.strokeRoundedRect(width/2 - panelW/2, height/2 - panelH/2, panelW, panelH, 26);
 
-  const t = this.add.text(width/2, height/2 - 70, "RAGE MODE", {
+  // Başlık
+  const t = this.add.text(width/2, height/2 - 118, "RAGE MODE", {
     fontFamily: UI_FONT,
     fontSize: "34px",
     color: "#ffffff",
     fontStyle: "900",
     align: "center"
-  }).setOrigin(0.5).setStroke("#000000", 10).setShadow(0, 4, "#000", 18);
+  }).setOrigin(0.5).setStroke("#000000", 12).setShadow(0, 4, "#000", 20);
 
-  const sub = this.add.text(width/2, height/2 - 20, "🥿 Terlik Yağmuru", {
+  const hintTop = this.add.text(width/2, height/2 - 84, "Silah seçimi: basılı tut (0.4 sn)", {
     fontFamily: UI_FONT,
-    fontSize: "20px",
-    color: "#ffffff",
-    fontStyle: "900",
-    align: "center"
-  }).setOrigin(0.5).setShadow(0, 3, "#000", 16).setStroke("#000", 8);
-
-  const hint = this.add.text(width/2, height/2 + 46, "Hazır ol… başlıyor 😈", {
-    fontFamily: UI_FONT,
-    fontSize: "14px",
-    color: "#ffffff",
+    fontSize: "13px",
+    color: "rgba(255,255,255,0.92)",
     fontStyle: "800",
     align: "center"
-  }).setOrigin(0.5).setShadow(0, 2, "#000", 12);
+  }).setOrigin(0.5).setStroke("#000", 8).setShadow(0, 2, "#000", 14);
 
-  this.ragePanel.add([bg, t, sub, hint]);
+  // TEK seçenek butonu
+  const btnW = panelW - 70;
+  const btnH = 82;
+  const btnX = width/2;
+  const btnY = height/2 - 10;
 
-  // kısa “girdi” sinyali
-  this.hitScreenFlash();
+  const btnBg = this.add.rectangle(btnX, btnY, btnW, btnH, 0x111827, 0.95)
+    .setStrokeStyle(3, 0xffffff, 0.22)
+    .setInteractive({ useHandCursor: true });
 
-  this.time.delayedCall(650, () => {
+  const btnTxt = this.add.text(btnX, btnY, "🥿 Terlik Yağmuru", {
+    fontFamily: UI_FONT,
+    fontSize: "22px",
+    color: "#ffffff",
+    fontStyle: "900"
+  }).setOrigin(0.5).setStroke("#000", 10).setShadow(0, 2, "#000", 14);
+
+  // Hold progress bar
+  const prog = this.add.graphics().setDepth(10001);
+  const progState = { p: 0 };
+  const drawProg = () => {
+    prog.clear();
+    const px = btnX - btnW/2;
+    const py = btnY + btnH/2 - 10;
+    const ph = 8;
+    const r = 6;
+
+    // track
+    prog.fillStyle(0x000000, 0.35);
+    prog.fillRoundedRect(px, py, btnW, ph, r);
+
+    // fill
+    prog.fillStyle(0xff3355, 0.92);
+    prog.fillRoundedRect(px, py, Math.max(10, btnW * progState.p), ph, r);
+  };
+  drawProg();
+
+  // Alt bilgi
+  const tip = this.add.text(width/2, height/2 + 98, "Yanlışlıkla seçilmez: basılı tutman şart 😈", {
+    fontFamily: UI_FONT,
+    fontSize: "12px",
+    color: "rgba(255,255,255,0.86)",
+    fontStyle: "800",
+    align: "center"
+  }).setOrigin(0.5).setStroke("#000", 8).setShadow(0, 2, "#000", 14);
+
+  this.ragePanel.add([bg, t, hintTop, btnBg, btnTxt, prog, tip]);
+
+  // Açılışta spam tıklama kazara hold başlatmasın
+  const HARD_LOCK_MS = 450;
+  const HOLD_MS = 400;
+
+  const cancelHold = () => {
+    if (!this.__rageHoldState) return;
+    if (this.__rageHoldState.tween) this.__rageHoldState.tween.stop();
+    this.__rageHoldState = null;
+    progState.p = 0;
+    drawProg();
+    btnBg.setFillStyle(0x111827, 0.95);
+    btnBg.setStrokeStyle(3, 0xffffff, 0.22);
+  };
+
+  const startHold = () => {
     if (this.ended) return;
+    if (!this.rageSelecting) return;
+    if ((this.time.now - nowOpen) < HARD_LOCK_MS) return; // spam lock
+    if (this.__rageHoldState) return;
 
-    if (this.ragePanel) { this.ragePanel.destroy(true); this.ragePanel = null; }
-    if (this.rageDim) { this.rageDim.destroy(); this.rageDim = null; }
+    btnBg.setFillStyle(0x1f2937, 0.98);
+    btnBg.setStrokeStyle(3, 0xff3355, 0.55);
 
-    this.rageSelecting = false;
-    this.isPaused = false;
+    this.__rageHoldState = { tween: null };
+    this.__rageHoldState.tween = this.tweens.add({
+      targets: progState,
+      p: 1,
+      duration: HOLD_MS,
+      ease: "Linear",
+      onUpdate: drawProg,
+      onComplete: () => {
+        // seçildi
+        this.__rageHoldState = null;
 
-    this.startRage("rage_slipper_rain");
-  });
+        if (this.ragePanel) { this.ragePanel.destroy(true); this.ragePanel = null; }
+        if (this.rageDim) { this.rageDim.destroy(); this.rageDim = null; }
+
+        this.rageSelecting = false;
+        this.isPaused = false;
+
+        this.startRage("rage_slipper_rain");
+      }
+    });
+  };
+
+  btnBg.on("pointerdown", startHold);
+  btnTxt.setInteractive({ useHandCursor: true }).on("pointerdown", startHold);
+
+  btnBg.on("pointerup", cancelHold);
+  btnBg.on("pointerout", cancelHold);
+  btnTxt.on("pointerup", cancelHold);
+  btnTxt.on("pointerout", cancelHold);
+
+  // mini sinyal
+  this.hitScreenFlash();
 }
-
 
   spawnRageSlipper() {
     if (!this.rageActive || this.rageWeaponKey !== "rage_slipper_rain") return;
@@ -1053,7 +1133,8 @@ enterRageSelection() {
 
 
   startRage(key) {
-    if (!this.rageSelecting) return;
+    if (this.ended) return;
+    if (this.rageActive) return;
 
     // seçim panelini kapat
     if (this.ragePanel) { this.ragePanel.destroy(true); this.ragePanel = null; }
@@ -1073,8 +1154,95 @@ enterRageSelection() {
     this.playRageBgm();
 
     const { width, height } = this.scale;
-    const duration = 7000;
+    const duration = 13000; // 10-15sn arası gerçek RAGE
     this.rageEndsAt = this.time.now + duration;
+
+    // --- Rage FX: kırmızı aura + şimşekler ---
+    const mkRect = (color, alpha, depth) =>
+      this.add.rectangle(width/2, height/2, width, height, color, alpha).setDepth(depth);
+
+    // Dim (arka plan görünür kalsın)
+    if (!this.rageDim) {
+      this.rageDim = mkRect(0x000000, 0, 9400);
+    }
+
+    // Kırmızı perde
+    if (!this.rageOverlay) {
+      this.rageOverlay = mkRect(0xff0022, 0, 9500);
+      this.rageOverlay.setBlendMode(Phaser.BlendModes.ADD);
+    }
+
+    // Kenar aura (glow border)
+    if (this.rageAura) { this.rageAura.destroy(); this.rageAura = null; }
+    this.rageAura = this.add.graphics().setDepth(9525);
+    this.rageAura.setBlendMode(Phaser.BlendModes.ADD);
+    this.rageAura.clear();
+    // birkaç kat stroke = glow hissi
+    this.rageAura.lineStyle(18, 0xff1133, 0.16);
+    this.rageAura.strokeRoundedRect(10, 10, width - 20, height - 20, 28);
+    this.rageAura.lineStyle(10, 0xff3355, 0.18);
+    this.rageAura.strokeRoundedRect(12, 12, width - 24, height - 24, 26);
+    this.rageAura.lineStyle(4, 0xffffff, 0.06);
+    this.rageAura.strokeRoundedRect(14, 14, width - 28, height - 28, 24);
+
+    this.tweens.killTweensOf(this.rageAura);
+    this.tweens.add({
+      targets: this.rageAura,
+      alpha: { from: 0.65, to: 1.0 },
+      duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut"
+    });
+
+    // Şimşek loop (rage boyunca)
+    if (this.rageLightningTimer) { this.rageLightningTimer.remove(false); this.rageLightningTimer = null; }
+    const spawnLightningOnce = () => {
+      if (!this.rageActive) return;
+
+      const g = this.add.graphics().setDepth(9600);
+      g.setBlendMode(Phaser.BlendModes.ADD);
+
+      const startX = Phaser.Math.Between(20, width - 20);
+      const startY = -10;
+      const steps = 8;
+
+      g.lineStyle(6, 0xffffff, 0.9);
+      g.beginPath();
+      g.moveTo(startX, startY);
+
+      let x = startX;
+      let y = startY;
+      for (let i = 0; i < steps; i++) {
+        x += Phaser.Math.Between(-70, 70);
+        x = Phaser.Math.Clamp(x, 20, width - 20);
+        y += (height / (steps + 1));
+        g.lineTo(x, y);
+      }
+      g.strokePath();
+
+      // minik flash
+      const flash = this.add.rectangle(width/2, height/2, width, height, 0xffffff, 0.06).setDepth(9599);
+      flash.setBlendMode(Phaser.BlendModes.ADD);
+
+      this.tweens.add({
+        targets: [g, flash],
+        alpha: 0,
+        duration: 240,
+        ease: "Quad.easeOut",
+        onComplete: () => { g.destroy(); flash.destroy(); }
+      });
+
+      // hissiyat
+      this.cameras.main.shake(90, 0.006);
+    };
+
+    const scheduleLightning = () => {
+      if (!this.rageActive) return;
+      spawnLightningOnce();
+      this.rageLightningTimer = this.time.delayedCall(Phaser.Math.Between(850, 1500), scheduleLightning);
+    };
+    this.rageLightningTimer = this.time.delayedCall(Phaser.Math.Between(350, 650), scheduleLightning);
 
     // Rage sırasında bar = süre (FULL → boşalıyor)
     this.anger = 100;
@@ -1201,6 +1369,19 @@ enterRageSelection() {
 
     // 🎵 müzik: rage biter → normal bgm devam
     this.resumeMainBgmAfterRage();
+
+    // Rage FX cleanup
+    if (this.rageLightningTimer) { this.rageLightningTimer.remove(false); this.rageLightningTimer = null; }
+    if (this.rageAura) {
+      this.tweens.killTweensOf(this.rageAura);
+      this.tweens.add({
+        targets: this.rageAura,
+        alpha: 0,
+        duration: 220,
+        ease: "Quad.easeOut",
+        onComplete: () => { if (this.rageAura) { this.rageAura.destroy(); this.rageAura = null; } }
+      });
+    }
     this.rageHadoukenShots = 0;
     this.rageHadoukenCdUntil = 0;
 
@@ -1637,15 +1818,19 @@ const endX = this.face.x + Phaser.Math.Between(-10, 10);
       onComplete: () => { this.body.y = this.bodyHomeY; }
     });
 
+    const baseSX = this.face.scaleX;
+    const baseSY = this.face.scaleY;
+
     this.tweens.add({
       targets: this.face,
-      scaleX: 0.92,
-      scaleY: 1.06,
+      scaleX: { from: baseSX, to: baseSX * 0.92 },
+      scaleY: { from: baseSY, to: baseSY * 1.06 },
       duration: 55,
       yoyo: true,
       ease: "Quad.easeOut",
       onComplete: () => {
-        this.face.setScale(1);
+        this.face.setScale(baseSX, baseSY);
+        // garanti: boyut sapıtmasın
         this.face.setDisplaySize(this.faceBaseSize, this.faceBaseSize);
       }
     });
@@ -1708,15 +1893,18 @@ const endX = this.face.x + Phaser.Math.Between(-10, 10);
       duration: 45,
       ease: "Quad.easeOut",
       onComplete: () => {
+        const baseSX = this.face.scaleX;
+        const baseSY = this.face.scaleY;
+
         this.tweens.add({
           targets: this.face,
-          scaleX: 1.03,
-          scaleY: 0.97,
+          scaleX: { from: baseSX, to: baseSX * 1.03 },
+          scaleY: { from: baseSY, to: baseSY * 0.97 },
           duration: 45,
           yoyo: true,
           ease: "Quad.easeOut",
           onComplete: () => {
-            this.face.setScale(1);
+            this.face.setScale(baseSX, baseSY);
             this.face.setDisplaySize(this.faceBaseSize, this.faceBaseSize);
           }
         });
