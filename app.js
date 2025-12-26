@@ -36,16 +36,6 @@ function ensureBgm(scene) {
 
 const UI_FONT = "system-ui, -apple-system, Segoe UI, Arial";
 
-// ✅ Face mask helper: "tam yuvarlak" değil -> hafif squircle/oval
-function drawFaceMaskRoundedRect(g, x, y, size) {
-  const w = size * 0.92; // biraz dar
-  const h = size * 1.02; // biraz uzun
-  const r = size * 0.22; // radius yarım olursa yine daireye yakınlaşır
-  g.clear();
-  g.fillStyle(0xffffff, 1);
-  g.fillRoundedRect(x - w / 2, y - h / 2, w, h, r);
-}
-
 function drawPremiumBg(scene, keepIntroImage = true) {
   const { width, height } = scene.scale;
 
@@ -213,7 +203,7 @@ class SplashScene extends Phaser.Scene {
     card.strokeRoundedRect(cardX - cardW / 2, cardY - cardH / 2, cardW, cardH, 22);
 
     const rawTitle = (this.pack.title || "").trim();
-    const title = (!rawTitle || /demo/i.test(rawTitle)) ? "Dölek ❤️ Bünyamin" : rawTitle;
+    const title = (!rawTitle || /demo/i.test(rawTitle)) ? "Ayşe ❤️ Mehmet" : rawTitle;
     this.add.text(width / 2, cardY - 270, title, {
       fontFamily: UI_FONT, fontSize: "28px", color: "#fff", fontStyle: "800"
     }).setOrigin(0.5).setShadow(0, 3, "#000", 12);
@@ -262,7 +252,7 @@ class SplashScene extends Phaser.Scene {
     const face = this.add.image(rightX, bodyTop + 48, "face").setDisplaySize(faceSize, faceSize);
 
     const mg = this.make.graphics({ add: false });
-    drawFaceMaskRoundedRect(mg, face.x, face.y, faceSize);
+    mg.fillCircle(face.x, face.y, faceSize / 2);
     face.setMask(mg.createGeometryMask());
 
     this.add.text(width / 2, frameY - 12, "💘", { fontFamily: UI_FONT, fontSize: "26px" }).setOrigin(0.5);
@@ -419,10 +409,9 @@ this.weapon = "slap";
     this.faceBaseSize = faceSize;
 
     this.face = this.add.image(this.body.x, faceY, "face").setDisplaySize(faceSize, faceSize);
-    // Face mask: tam daire değil (squircle/oval) + yüzle beraber hareket etsin
-    this.faceMaskG = this.make.graphics({ add: false });
-    drawFaceMaskRoundedRect(this.faceMaskG, this.face.x, this.face.y, faceSize);
-    this.face.setMask(this.faceMaskG.createGeometryMask());
+    // Face mask: daima yüzle beraber hareket etsin (yoksa “foto büyüdü/taştı” gibi görünür)
+    this.faceMaskCircle = this.add.circle(this.face.x, this.face.y, faceSize/2, 0x000000, 0);
+    this.face.setMask(this.faceMaskCircle.createGeometryMask());
 
     this.girl = this.add.image(width * 0.23, height - this.bottomBarH - 15, "girl_base");
     const baseGirlW = Math.min(width * 0.62, 260);
@@ -504,8 +493,9 @@ this.weapon = "slap";
 
   update(){
     // Mask objesi yüzle beraber aksın
-    if (this.faceMaskG && this.face) {
-      drawFaceMaskRoundedRect(this.faceMaskG, this.face.x, this.face.y, this.faceBaseSize);
+    if (this.faceMaskCircle && this.face) {
+      this.faceMaskCircle.x = this.face.x;
+      this.faceMaskCircle.y = this.face.y;
     }
   }
 
@@ -613,23 +603,36 @@ this.tweens.killTweensOf(this.face);
   /* -------------------------------------------------------- */
 
   hitStop(ms = 60) {
-    // Mobilde setTimeout bazen kafayı yiyor (tab arka plana gidince vs) → tween timeScale düşük kalıp
-    // “karakter durdu” gibi hissettiriyor. Phaser time ile garanti geri alıyoruz.
-    const prev = (typeof this.tweens.timeScale === "number") ? this.tweens.timeScale : 1;
+    // ❗ Eski sürüm: global tweens.timeScale düşürüyordu → kızın tween'leri de "donmuş" gibi oluyordu.
+    // Burada global timeScale'e dokunmuyoruz. "Hit stop" hissini sadece kameraya mikro darbe efektiyle veriyoruz.
 
-    // önceki geri-al event'i varsa iptal et
     if (this.__hitStopEvent && this.__hitStopEvent.remove) {
       this.__hitStopEvent.remove(false);
       this.__hitStopEvent = null;
     }
 
-    this.tweens.timeScale = 0.08;
+    const cam = this.cameras?.main;
+    if (!cam) return;
 
-    // Phaser clock ile geri al
-    this.__hitStopEvent = this.time.delayedCall(ms, () => {
-      // scene kapanmış olabilir
-      if (!this.tweens) return;
-      this.tweens.timeScale = prev;
+    // kamera mikro zoom (çok kısa) → tok hissi verir ama kimseyi durdurmaz
+    this.tweens.killTweensOf(cam);
+    const baseZoom = cam.zoom || 1;
+    cam.setZoom(baseZoom);
+
+    this.tweens.add({
+      targets: cam,
+      zoom: baseZoom * 1.018,
+      duration: Math.max(30, Math.min(70, Math.floor(ms * 0.45))),
+      yoyo: true,
+      ease: "Quad.easeOut",
+      onComplete: () => cam.setZoom(baseZoom)
+    });
+
+    // güvenlik: arka plana gidip gelince bir şey takılı kalmasın
+    this.__hitStopEvent = this.time.delayedCall(ms + 80, () => {
+      if (!this.cameras?.main) return;
+      this.cameras.main.setZoom(baseZoom);
+      this.__hitStopEvent = null;
     });
   }
 
@@ -1661,8 +1664,10 @@ if (this.weaponButtons) {
   this.face.y = this.faceHomeY;
 
   // Mask da hizalansın
-  if (this.faceMaskG) {
-    drawFaceMaskRoundedRect(this.faceMaskG, this.face.x, this.face.y, this.faceBaseSize);
+  if (this.faceMaskCircle) {
+    this.faceMaskCircle.x = this.face.x;
+    this.faceMaskCircle.y = this.face.y;
+    this.faceMaskCircle.setRadius(this.faceBaseSize / 2);
   }
   }
 
