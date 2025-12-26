@@ -213,7 +213,7 @@ class SplashScene extends Phaser.Scene {
     card.strokeRoundedRect(cardX - cardW / 2, cardY - cardH / 2, cardW, cardH, 22);
 
     const rawTitle = (this.pack.title || "").trim();
-    const title = (!rawTitle || /demo/i.test(rawTitle)) ? "Ayşe ❤️ Mehmet" : rawTitle;
+    const title = (!rawTitle || /demo/i.test(rawTitle)) ? "Dölek ❤️ Bünyamin" : rawTitle;
     this.add.text(width / 2, cardY - 270, title, {
       fontFamily: UI_FONT, fontSize: "28px", color: "#fff", fontStyle: "800"
     }).setOrigin(0.5).setShadow(0, 3, "#000", 12);
